@@ -26,13 +26,21 @@ MODEL_DIR="${MODEL_DIR:-${EXP_DIR}}"
 DATA_DIR="${DATA_DIR:-${EXP_DIR}}"
 NUM_ROLLOUT="${NUM_ROLLOUT:=200}"
 
+# Hyperparameters overridable via environment variables for easy debugging.
+ROLLOUT_BATCH_SIZE="${ROLLOUT_BATCH_SIZE:=128}"
+N_SAMPLES_PER_PROMPT="${N_SAMPLES_PER_PROMPT:=1}"
+WEIGHT_DECAY="${WEIGHT_DECAY:=0.01}"
+LR="${LR:=1e-6}"
+# global-batch-size derived from rollout-batch-size * n-samples-per-prompt.
+GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:=$((ROLLOUT_BATCH_SIZE * N_SAMPLES_PER_PROMPT))}"
+
 # STUDENT: the pre-RL checkpoint (standard Qwen3.5-35B-A3B).
 STUDENT_MODEL_NAME="${STUDENT_MODEL_NAME:-Qwen3.5-35B-A3B}"
 # TEACHER: RL-trained math checkpoint(from STEP_1)
 TEACHER_MODEL_NAME="${TEACHER_MODEL_NAME:-Qwen3.5-35B-A3B-GRPO-dapomath17k-400step}"
 TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-${MODEL_DIR}/${TEACHER_MODEL_NAME}}"
 
-EXP_NAME=opd-mathopd-${STUDENT_MODEL_NAME}-teacher-${TEACHER_MODEL_NAME}-${now}
+EXP_NAME=opd-mathopd-${STUDENT_MODEL_NAME}-teacher-${TEACHER_MODEL_NAME}-rbs${ROLLOUT_BATCH_SIZE}-n${N_SAMPLES_PER_PROMPT}-lr${LR}-wd${WEIGHT_DECAY}-${now}
 SAVE_DIR=${EXP_DIR}/save/${EXP_NAME}
 mkdir -p "${SAVE_DIR}"
 
@@ -56,11 +64,11 @@ ROLLOUT_ARGS=(
    --reward-key score
 
    --num-rollout              ${NUM_ROLLOUT}
-   --rollout-batch-size       128
-   --n-samples-per-prompt     1
+   --rollout-batch-size       ${ROLLOUT_BATCH_SIZE}
+   --n-samples-per-prompt     ${N_SAMPLES_PER_PROMPT}
    --rollout-max-response-len 8192
    --rollout-temperature      1
-   --global-batch-size 128
+   --global-batch-size ${GLOBAL_BATCH_SIZE}
    --use-fault-tolerance
    --balance-data
 )
@@ -105,9 +113,9 @@ GRPO_ARGS=(
 
 OPTIMIZER_ARGS=(
    --optimizer adam
-   --lr 1e-6
+   --lr ${LR}
    --lr-decay-style constant
-   --weight-decay 0.01
+   --weight-decay ${WEIGHT_DECAY}
    --adam-beta1 0.9
    --adam-beta2 0.999
    --optimizer-cpu-offload
