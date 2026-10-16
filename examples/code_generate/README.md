@@ -51,9 +51,9 @@ RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/code_generate/baseline
 
 ## 已记录的训练曲线
 
-![DeepCoder baseline training curves](results/baseline.png)
+训练曲线见 [PR #444 的 Screenshots / Logs](https://github.com/redai-studio/Relax/pull/444)。
 
-图和 [原始指标 CSV](results/baseline.csv) 来自同一次历史 baseline 的指标导出，快照时间为 **2026-10-16 04:57:56 UTC**。导出的 238 个 reward、grad norm、entropy、logprob-difference 点覆盖 iteration 0–237；step time 有 237 个点，覆盖 0–236。横轴保留指标系统的 iteration，不额外推断为独立评测轮次。
+图来自同一次历史 baseline 的指标导出，快照时间为 **2026-10-16 04:57:56 UTC**。导出的 238 个 reward、grad norm、entropy、logprob-difference 点覆盖 iteration 0–237；step time 有 237 个点，覆盖 0–236。横轴保留指标系统的 iteration，不额外推断为独立评测轮次。
 
 浅线为未平滑、未降采样的原始数据；深线为包含当前点的至多 20 点移动平均。`rollout/raw_reward` 是当前训练采样的通过率，**不是独立测试集准确率**。前 20 点平均通过率 0.3064，最后 20 点为 0.6334；题目随训练变化，这两个窗口只描述该次运行。其他面板展示优化统计与 step 耗时，不据此声称算法对比收益。
 
