@@ -8,11 +8,19 @@
 
 链路：`group_rm → 原始 0/1 判题 → 冻结 code/test_output → agentic grader → weights → compute_group_rewards → Relax 组内减均值`。
 
-- 使用现有 `--group-rm` 和本目录 `sandbox.reward_group`；共享 `grader_common.py` 与 GAGAR 算法。两种任务分别加载各自目录的 `grader.yaml`（system prompt）和 `instance.jinja`（instance prompt）；SWE 继续用 bridge，代码生成使用 grader 自己的 sandbox。
+- 使用现有 `--group-rm` 和本目录 `group_rm.reward_group`；共享 `grader_common.py` 与 GAGAR 算法。两种任务分别加载各自目录的 `grader.yaml`（system prompt）和 `instance.jinja`（instance prompt）；SWE 继续用 bridge，代码生成使用 grader 自己的 sandbox。
 - 代码生成使用本目录的英文 `grader.yaml`：评价效率、简洁清晰程度；必要时读代码、构造输入并运行。直接返回每个通过候选的 `[0,1]` 质量权重和依据，允许 0、并列，也不要求权重和为 1。不使用 SWE 的五项 rubric、分档或 rank-to-weight。
 - instance prompt 提供题目、候选 ID、原始 outcome 和证据读取方式。只提供代码和判题结果，不向 grader 提供 think 或完整 submission；原始回答保留在宿主审计文件。代码和判题结果可分页读取，代码挂在 `/candidates/<rollout_n>/solution.py`，实验写在 `/workspace`。
 - grader 的 bash 只接收 `command`，直接在自身容器里执行；SWE bridge 的 bash 仍要求 `rollout_n`。GenRM 使用 Relax 原有 `/generate`，没有新增模型服务。
 - 全通过或全失败组沿用 GAGAR 公式原有行为，最终中心化优势为 0。失败答案不进入质量评分；grader 不改写原始 outcome。
+
+### 代码职责
+
+- `group_rm.py`：Relax group RM 入口，准备整组输入、监督 worker，处理取消、质量评分回退与 reward 记录。
+- `sandbox.py`：独立 worker 内的原始判题、grader 容器编排、固定 GenRM 代理、实例租约和清理；也保留 `--cleanup-owner` 定向回收入口。
+- `apptainer.py`：实例启停、tracked child 和 subreaper。
+- `sandbox_env.py`：容器内 bash 执行器，以及本任务证据范围、评分函数与共享 grader 工具的组合。
+- `scoring.py`：代码生成质量权重的校验；`grader.yaml` / `instance.jinja` 分别提供 system / instance prompt。
 
 ### 环境与镜像
 

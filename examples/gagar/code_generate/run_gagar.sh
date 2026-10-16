@@ -20,7 +20,7 @@ GAGAR_ARGS=(
    # Eight training GPUs: TP2, PP1, CP1, DP4.
    --context-parallel-size 1
    --group-rm
-   --custom-rm-path examples.gagar.code_generate.sandbox.reward_group
+   --custom-rm-path examples.gagar.code_generate.group_rm.reward_group
    --reward-key score
    --eval-reward-key test_reward
    --reward-max-concurrency 2

@@ -14,6 +14,12 @@ Code generation also includes its [0/1 baseline](code_generate/BASELINE.md).
 The SWE directory contains the GAGAR version only, including its own server and
 on-demand SIF cache. It preserves original train/eval judging and lifecycle safeguards.
 
+Code generation enters through `code_generate/group_rm.py`, which supervises
+the separate `sandbox.py` worker. SWE enters through `minisweagent/group_rm.py`
+and asks the bridge to run the grader against retained candidate environments.
+Both entry points return the shared reward records without changing the original
+outcome judging or sandbox cleanup rules.
+
 Setup and launch details: [code generation](code_generate/README.md) ·
 [SWE](minisweagent/README.md).
 
