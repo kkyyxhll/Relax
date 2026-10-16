@@ -57,3 +57,7 @@ pytest -q tests/examples/test_gagar.py
 ```
 
 测试直接经过 Relax 的生产组归一化函数，覆盖 cap 前后、零权重、全通过/全失败、候选顺序和不修改输入。
+
+## Agentic grader demo（Draft）
+
+两种执行环境、各自的 prompts、安装步骤和真实轨迹回放见 [DEMO.md](DEMO.md)。该 demo 待审阅，训练收益尚未验证。

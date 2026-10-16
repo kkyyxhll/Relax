@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# Code-generation demo: reuse the binary baseline and Relax split GenRM.
+set -eo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+export GAGAR_GRADER_MODE=sandbox
+if [ -z "${RELAX_ENTRYPOINT_MODE:-}" ]; then
+    source "${SCRIPT_DIR}/../../../scripts/entrypoint/local.sh"
+fi
+: "${MODEL_DIR:?Set MODEL_DIR to the model root}"
+: "${SAVE_DIR:?Set SAVE_DIR to a persistent checkpoint root}"
+export PROJECT_NAME="${PROJECT_NAME:-Relax/gagar/deepcoder}"
+export EXP_NAME="${EXP_NAME:-gagar-deepcoder-qwen35-4b-think16k-8gpu}"
+: "${GAGAR_SANDBOX_IMAGE:?Set the local Python/SandboxFusion SIF path}"
+: "${MINI_SWE_AGENT_VENV:?Set the host mini-swe-agent venv path}"
+export GAGAR_AUDIT_DIR="${GAGAR_AUDIT_DIR:-${SAVE_DIR}/${EXP_NAME}/grader}"
+export GAGAR_MODEL_PATH="${GAGAR_MODEL_PATH:-${MODEL_DIR}/Qwen3.8-27B}"
+RESOURCE='{"actor": [1, 8], "rollout": [1, 4], "genrm": [1, 4]}'
+GAGAR_ARGS=(
+   # Eight training GPUs: TP2, PP1, CP1, DP4.
+   --context-parallel-size 1
+   --group-rm
+   --custom-rm-path examples.gagar.group_rm.reward_func
+   --reward-key score
+   --eval-reward-key test_reward
+   --reward-max-concurrency 2
+   --disable-grpo-std-normalization
+   --genrm-model-path "${GAGAR_MODEL_PATH}"
+   --genrm-num-gpus 4
+   --genrm-num-gpus-per-engine 2
+   --genrm-engine-config '{"context_length": 65536, "mem_fraction_static": 0.8, "cuda_graph_backend_prefill": "disabled"}'
+   --genrm-sampling-config '{"temperature": 1.0, "top_p": 0.95, "top_k": 20, "max_response_len": 16384, "chat_template_kwargs": {"enable_thinking": true, "preserve_thinking": true, "reasoning_effort": "xhigh"}}'
+)
+RUNTIME_ENV_JSON=$(python3 - <<'ENV'
+import json
+import os
+runtime = json.loads(os.environ["RUNTIME_ENV_JSON"])
+env = runtime.setdefault("env_vars", {})
+env.update({key: value for key, value in os.environ.items()
+         if key.startswith("GAGAR_") or key == "MINI_SWE_AGENT_VENV"})
+env["RAY_JOB_STOP_WAIT_TIME_S"] = "180"
+print(json.dumps(runtime))
+ENV
+)
+export RESOURCE RUNTIME_ENV_JSON
+exec bash "${SCRIPT_DIR}/../../code_generate/baseline.sh" "${GAGAR_ARGS[@]}" "$@"

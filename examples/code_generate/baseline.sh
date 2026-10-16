@@ -11,7 +11,9 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 : "${MODEL_DIR:?Set MODEL_DIR to the model root}"
 : "${DATA_DIR:?Set DATA_DIR to the prepared dataset directory}"
 : "${SAVE_DIR:?Set SAVE_DIR to a persistent checkpoint root}"
-: "${SANDBOX_URL:?Set SANDBOX_URL to the SandboxFusion service URL}"
+if [[ "${GAGAR_GRADER_MODE:-}" != "sandbox" ]]; then
+    : "${SANDBOX_URL:?Set SANDBOX_URL to the SandboxFusion service URL}"
+fi
 export RAY_NO_WAIT="${RAY_NO_WAIT-}"
 if [ -z "${RELAX_ENTRYPOINT_MODE:-}" ]; then
     source "${SCRIPT_DIR}/../../scripts/entrypoint/local.sh"
@@ -135,7 +137,7 @@ MISC_ARGS=(
    --max-global-restart 0
 )
 
-RESOURCE='{"actor": [1, 8], "rollout": [1, 8]}'
+RESOURCE=${RESOURCE:-'{"actor": [1, 8], "rollout": [1, 8]}'}
 
 mkdir -p "${SAVE_DIR}/${EXP_NAME}/logs"
 ray job submit ${RAY_NO_WAIT:+--no-wait} --address="http://${HOST_IP}:8265" \

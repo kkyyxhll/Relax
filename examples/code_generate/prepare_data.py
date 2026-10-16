@@ -51,7 +51,7 @@ def convert_row(row: dict[str, Any], subset: str, index: int) -> dict[str, Any]:
     return {
         "input": [{"role": "user", "content": prompt}],
         "label": json.dumps({"inputs": inputs, "outputs": outputs, "fn_name": function}, ensure_ascii=False),
-        "metadata": {"data_source": subset, "task_id": f"{subset}/train/{index}"},
+        "metadata": {"data_source": subset, "task_id": f"{subset}/train/{index}", "task": prompt},
     }
 
 

@@ -42,6 +42,11 @@ if [ "${R2E_SETUP_SKIP_DOWNLOADS:-0}" != "1" ]; then
       --local-dir "${R2E_DATA_PATH}/SWE-Bench-Lite"
 fi
 
+if [ "${R2E_SETUP_SKIP_SIFS:-0}" = "1" ]; then
+   echo "Data and wheels ready; SIF construction is deferred to the agent server."
+   exit 0
+fi
+
 IMAGES="$(python "${SCRIPT_DIR}/check_r2e_sifs.py" \
    --data-path "${R2E_DATA_PATH}" \
    --sif-dir "${R2E_SIF_DIR}" \
