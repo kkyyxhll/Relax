@@ -47,7 +47,11 @@ flowchart TD
   Q --> U[Export audit; stop grader instance]
 ```
 
-Only task-specific environment adapters execute commands. Both graders reuse the group RM and agent loop, then feed aligned quality weights into the same arithmetic. Their scoring rubrics are intentionally different.
+`grader_common.py` owns the agent loop and the shared `read_evidence` /
+`submit_grades` dispatch. Each task composes it with its own bash executor,
+evidence sections, scoring function and prompts.
+
+Only task-specific bash adapters execute commands. Both graders reuse the group RM and agent loop, then feed aligned quality weights into the same arithmetic. Their scoring rubrics are intentionally different.
 
 ## Recorded execution
 

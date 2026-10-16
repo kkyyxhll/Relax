@@ -4,6 +4,7 @@
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -289,6 +290,49 @@ def submit_result(result: dict) -> None:
     raise Submitted(
         {"role": "exit", "content": submission, "extra": {"exit_status": "Submitted", "submission": submission}}
     )
+
+
+class GraderEnvironment:
+    """Shared evidence and submission tools with task-owned bash and
+    scoring."""
+
+    def __init__(
+        self,
+        manifest: dict,
+        *,
+        bash: Callable[[dict], dict],
+        grade_to_weights: Callable[[list[float], dict], dict],
+        sections: set[str],
+        evidence_access: str,
+        environment_type: str,
+    ) -> None:
+        self.manifest = manifest
+        self.bash = bash
+        self.grade_to_weights = grade_to_weights
+        self.sections = sections
+        self.evidence_access = evidence_access
+        self.environment_type = environment_type
+
+    def execute(self, action: dict, cwd: str = "") -> dict:
+        try:
+            name = action["name"]
+            if name == "bash":
+                return self.bash(action)
+            if name == "read_evidence":
+                return read_evidence(self.manifest, action, self.sections)
+            if name == "submit_grades":
+                rewards = [candidate["reward"] for candidate in self.manifest["candidates"]]
+                submit_result(self.grade_to_weights(rewards, action))
+            raise ValueError("unknown tool")
+        except (ValueError, KeyError, TypeError, httpx.HTTPError) as exc:
+            return {"output": f"Tool rejected: {exc}", "returncode": -1}
+
+    def get_template_vars(self, **kwargs: Any) -> dict:
+        return {"evidence_access": self.evidence_access}
+
+    def serialize(self) -> dict:
+        # Keep capabilities and complete evidence out of per-step serialization.
+        return {"info": {"environment_type": self.environment_type}}
 
 
 def run_grader(manifest: dict, output: Path, env: Any, config: dict) -> None:
