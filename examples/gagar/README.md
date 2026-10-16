@@ -54,4 +54,6 @@ cap 生效时不再补回全部正优势；最终减均值也会改变失败候�
 
 两种执行环境、各自的 prompts 和安装步骤见 [DEMO.md](DEMO.md)。该 demo 待审阅，训练收益尚未验证。
 
-目录：`app/code_generate/` 包含代码生成 baseline 与 GAGAR；`app/minisweagent/` 包含 SWE GAGAR 的完整实现和 SIF cache。共享部分为 `core/gar.py`、`core/gar.py` 和 `core/grs.py`。历史运行回放保留在 [PR #446](https://github.com/redai-studio/Relax/pull/446) 正文。
+目录：`core/gar.py` 包含 GAR 公式和 reward 记录；`core/grs.py` 包含共享 agentic grader 与环境接口。`app/code_generate/` 包含代码生成 baseline 的数据/判题适配和 GAGAR 环境；`app/minisweagent/` 包含 SWE GAGAR 实现。训练脚本和 `run_grs.sh` 位于本目录。历史运行回放保留在 [PR #446](https://github.com/redai-studio/Relax/pull/446) 正文。
+
+两种任务的 system / instance prompt、agent 预算、环境参数与 GenRM 推理配置统一在 [grader.yaml](grader.yaml)。设置 `GAGAR_CONFIG` 可指定另一份相同结构的 YAML；模型路径、镜像位置等节点配置继续使用原有环境变量。

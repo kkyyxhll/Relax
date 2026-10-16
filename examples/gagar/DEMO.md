@@ -1,14 +1,15 @@
 # Agentic grader — Draft demo
 
-The integration is contained in `examples/gagar`. Each task owns its environment,
-prompts, scoring adapter and launch scripts. Only the arithmetic, reward record
+The integration is contained in `examples/gagar`. Each task owns its environment and scoring adapter. Root launch scripts and
+`grader.yaml` select the task and its configuration. `app/runner.py` uses process replacement
+to preserve the PID tracked by existing leases and cancellation. Only the arithmetic, reward record
 format and mini-swe grader loop are shared. No core GenRM or other recipe changes
 are required.
 
-| Task            | Entry point                                  | Model commands                            | System / instance prompts                                                              |
-| --------------- | -------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
-| Code generation | [run_code_generate.sh](run_code_generate.sh) | `bash(command)` in the grader sandbox     | [system](app/code_generate/grader.yaml) / [instance](app/code_generate/instance.jinja) |
-| SWE             | [run_minisweagent.sh](run_minisweagent.sh)   | `bash(rollout_n, command)` via the bridge | [system](app/minisweagent/grader.yaml) / [instance](app/minisweagent/instance.jinja)   |
+| Task            | Entry point                                  | Model commands                            | Configuration                        |
+| --------------- | -------------------------------------------- | ----------------------------------------- | ------------------------------------ |
+| Code generation | [run_code_generate.sh](run_code_generate.sh) | `bash(command)` in the grader sandbox     | `grader.yaml`: `tasks.code_generate` |
+| SWE             | [run_minisweagent.sh](run_minisweagent.sh)   | `bash(rollout_n, command)` via the bridge | `grader.yaml`: `tasks.minisweagent`  |
 
 Code generation also includes its [0/1 baseline](app/code_generate/BASELINE.md).
 The SWE directory contains the GAGAR version only, including its own server and
@@ -55,7 +56,8 @@ flowchart TD
 
 `core/grs.py` owns the agent loop and the shared `read_evidence` /
 `submit_grades` dispatch. Each task composes it with its own bash executor,
-evidence sections, scoring function and prompts.
+scoring function. Evidence sections, prompts, budgets and environment parameters
+come from the shared `grader.yaml`.
 
 Only task-specific bash adapters execute commands. Both graders reuse the group RM and agent loop, then feed aligned quality weights into the same arithmetic. Their scoring rubrics are intentionally different.
 
@@ -83,7 +85,25 @@ The replay demonstrates execution and scoring evidence, not a convergence advant
 `core/grs.py` owns the mini-swe-agent loop and the `execute` / `close` backend
 interface. Task adapters and sandbox implementations live in `app/`.
 `run_grs.sh --task code_generate|minisweagent --input INPUT --output OUTPUT`
-runs one already-prepared grader session using `MINI_SWE_AGENT_VENV`.
+uses `MINI_SWE_AGENT_VENV` and the YAML entrypoint. Code generation accepts
+the group worker input (task, labels, responses and GenRM URL), provisions its
+containers and runs the shared grader inside. SWE accepts a retained-group
+manifest and attaches to its bridge.
 The code-generation worker invokes the same Python entry point inside its
 container; SWE invokes it with a bridge connection. The original worker and
 bridge continue to own provisioning, cancellation and final sandbox cleanup.
+
+## Unified configuration
+
+`grader.yaml` contains common agent and command budgets plus task-specific
+model settings, GenRM engine/sampling settings, environment adapters, evidence
+sections, system templates and instance templates. Jinja variables such as
+`{{ task }}` remain supported inside YAML block strings. There are no separate
+instance template files. `app/config.py` resolves task settings without importing
+mini-swe-agent into the training process.
+
+Use `GAGAR_CONFIG=/absolute/path/grader.yaml` for both training launchers, for training and `run_grs.sh` sessions. The underlying shared grader also
+accepts `--config FILE` when invoked directly. The code-generation worker carries the resolved task config
+into its isolated container. Existing node-path and SWE lease environment
+overrides retain precedence. Original rollout/harness configuration and image
+build files remain inside the task's sandbox implementation.

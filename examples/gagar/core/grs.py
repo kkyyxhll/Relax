@@ -5,16 +5,16 @@
 import argparse
 import importlib
 import json
-import os
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
-import yaml
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.exceptions import FormatError, Submitted
+
+from examples.gagar.app.config import load_task_config
 
 
 def parse_action(response: str, *, thinking: bool = False) -> dict:
@@ -399,16 +399,21 @@ def run_grader(manifest: dict, output: Path, env: Any, config: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one task's agentic grader using Relax GenRM.")
     parser.add_argument("--task", choices=("code_generate", "minisweagent"), required=True)
+    parser.add_argument("--config", type=Path)
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    task = importlib.import_module(f"examples.gagar.app.{args.task}.grader")
-    directory = Path(task.__file__).parent
-    config_path = Path(os.environ.get("GAGAR_CONFIG", directory / "grader.yaml"))
-    config = yaml.safe_load(config_path.read_text())
-    config["agent"].setdefault("instance_template", (directory / "instance.jinja").read_text())
     manifest = json.loads(args.input.read_text())
-    env = task.create_environment(manifest)
+    if args.config is not None:
+        config = load_task_config(args.task, args.config)
+    elif "grader_config" in manifest:
+        # The worker passes its resolved config into an isolated container.
+        config = manifest["grader_config"]
+    else:
+        config = load_task_config(args.task)
+    module, name = config["environment"]["adapter"].rsplit(".", 1)
+    factory = getattr(importlib.import_module(module), name)
+    env = factory(manifest, config["environment"])
     try:
         run_grader(manifest, args.output, env, config)
     finally:

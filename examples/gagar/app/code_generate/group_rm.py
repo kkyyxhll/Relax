@@ -13,6 +13,7 @@ from typing import Any
 
 from examples.gagar.app.code_generate.sandbox.worker import SandboxCleanupError, cleanup_scratch, write_json
 from examples.gagar.app.code_generate.scoring import grade_to_weights
+from examples.gagar.app.config import load_task_config
 
 
 async def finish_worker(proc: Any, python: str, directory: Path, log: Any) -> None:
@@ -64,12 +65,14 @@ async def reward_group(args: Any, samples: list[Any], **kwargs: Any) -> list[dic
     task = samples[0].metadata.get("task", samples[0].prompt)
     if not isinstance(task, str):
         task = json.dumps(task, ensure_ascii=False)
+    config = load_task_config("code_generate")
     payload = {
         "task_id": task_id,
         "label": label,
         "task": task,
         "responses": [s.response for s in samples],
         "genrm_url": get_serve_url("genrm"),
+        "grader_config": config,
     }
     audit_root = Path(os.environ["GAGAR_AUDIT_DIR"])
     audit_root.mkdir(parents=True, exist_ok=True)
@@ -81,7 +84,9 @@ async def reward_group(args: Any, samples: list[Any], **kwargs: Any) -> list[dic
         proc = await asyncio.create_subprocess_exec(
             python,
             "-m",
-            "examples.gagar.app.code_generate.sandbox.worker",
+            "examples.gagar.app.runner",
+            "--task",
+            "code_generate",
             "--input",
             str(directory / "input.json"),
             "--output",
@@ -91,7 +96,12 @@ async def reward_group(args: Any, samples: list[Any], **kwargs: Any) -> list[dic
             stderr=log,
         )
         try:
-            await asyncio.wait_for(proc.wait(), timeout=180 * len(samples) + 1920)
+            await asyncio.wait_for(
+                proc.wait(),
+                timeout=config["environment"]["judge_timeout"] * len(samples)
+                + config["environment"]["grading_timeout"]
+                + config["environment"]["worker_grace_seconds"],
+            )
         finally:
             finishing = asyncio.create_task(finish_worker(proc, python, directory, log))
             try:

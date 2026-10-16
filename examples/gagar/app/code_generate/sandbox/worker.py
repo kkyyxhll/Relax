@@ -22,6 +22,7 @@ import httpx
 
 from examples.gagar.app.code_generate.reward import extract_code, judge_request, outcome_from_result
 from examples.gagar.app.code_generate.scoring import grade_to_weights
+from examples.gagar.app.config import load_task_config
 
 
 class SandboxCleanupError(Exception):
@@ -48,8 +49,8 @@ class GenRMProxy:
     """A group-local Unix socket that forwards only messages to the fixed
     GenRM."""
 
-    def __init__(self, path: Path, service_url: str) -> None:
-        self.client = httpx.Client(timeout=600, trust_env=False)
+    def __init__(self, path: Path, service_url: str, *, timeout: float = 600) -> None:
+        self.client = httpx.Client(timeout=timeout, trust_env=False)
         self.url = service_url.rstrip("/") + "/generate"
         self.calls = 0
         proxy = self
@@ -240,6 +241,10 @@ def run_group(payload: dict, output: Path) -> None:
     from examples.gagar.app.code_generate.sandbox.apptainer import _drain_orphans, _install_child_subreaper_and_reaper
 
     _install_child_subreaper_and_reaper()
+    config = payload.get("grader_config")
+    if config is None:
+        config = load_task_config("code_generate")
+    settings = config["environment"]
     image = os.environ["GAGAR_SANDBOX_IMAGE"]
     code_root = Path(__file__).resolve().parents[3]
     scratch_root = os.environ.get("GAGAR_SANDBOX_TMPDIR")
@@ -277,7 +282,7 @@ def run_group(payload: dict, output: Path) -> None:
                                 "examples.gagar.app.code_generate.sandbox.sandbox_fusion",
                                 "/input/request.json",
                             ],
-                            180,
+                            settings["judge_timeout"],
                         )
                         result = json.loads(raw)
                         candidate["reward"] = outcome_from_result(payload["task_id"], result)
@@ -303,6 +308,7 @@ def run_group(payload: dict, output: Path) -> None:
             socket_dir.mkdir()
             manifest = {
                 "task": payload["task"],
+                "grader_config": config,
                 "candidates": [
                     {key: candidate[key] for key in ("rollout_n", "code", "reward", "test_output")}
                     for candidate in candidates
@@ -313,7 +319,7 @@ def run_group(payload: dict, output: Path) -> None:
             write_json(grader_dir / "manifest.json", manifest)
             grading = None
             error = None
-            proxy = GenRMProxy(socket_dir / "model.sock", payload["genrm_url"])
+            proxy = GenRMProxy(socket_dir / "model.sock", payload["genrm_url"], timeout=settings["proxy_timeout"])
             try:
                 with instance(
                     image,
@@ -340,15 +346,17 @@ def run_group(payload: dict, output: Path) -> None:
                                 "--output",
                                 "/workspace/result.json",
                             ],
-                            1800,
+                            settings["grading_timeout"],
                         )
-                        grading = json.loads(execute(env, ["/bin/cat", "/workspace/result.json"], 15))
+                        grading = json.loads(
+                            execute(env, ["/bin/cat", "/workspace/result.json"], settings["trace_timeout"])
+                        )
                         grade_to_weights(original, grading)
                     finally:
                         # Best effort trace retrieval must not hide a cleanup failure.
                         for name in ("trajectory.json", "events.jsonl", "summary.json"):
                             try:
-                                trace = execute(env, ["/bin/cat", f"/workspace/{name}"], 15)
+                                trace = execute(env, ["/bin/cat", f"/workspace/{name}"], settings["trace_timeout"])
                                 output.with_name(name).write_text(trace)
                             except (RuntimeError, subprocess.TimeoutExpired, OSError):
                                 pass

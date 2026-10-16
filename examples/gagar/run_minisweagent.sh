@@ -23,7 +23,7 @@ fi
 export AGENT_SERVER_SIF_CACHE="${AGENT_SERVER_SIF_CACHE:-1}"
 export AGENT_SERVER_SIF_CACHE_GB="${AGENT_SERVER_SIF_CACHE_GB:-128}"
 export AGENT_SERVER_SIF_BUILD_CONCURRENCY="${AGENT_SERVER_SIF_BUILD_CONCURRENCY:-2}"
-export GAGAR_GRADER_COMMAND="${GAGAR_GRADER_COMMAND:-\"${MINI_SWE_AGENT_VENV}/bin/python\" -m examples.gagar.core.grs --task minisweagent}"
+export GAGAR_GRADER_COMMAND="${GAGAR_GRADER_COMMAND:-\"${MINI_SWE_AGENT_VENV}/bin/python\" -m examples.gagar.app.runner --task minisweagent}"
 export GAGAR_MODEL_PATH="${GAGAR_MODEL_PATH:-${MODEL_DIR}/Qwen3.8-27B}"
 export PYTHONPATH="${RELAX_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
@@ -183,6 +183,8 @@ RAY_RESOURCE_ARGS=(
    # --use-health-check
 )
 
+GENRM_OPTIONS=$(python3 "${SCRIPT_DIR}/app/config.py" --task minisweagent --genrm-args)
+readarray -t GENRM_ARGS <<<"${GENRM_OPTIONS}"
 GAGAR_ARGS=(
    --group-rm
    --custom-rm-path examples.gagar.app.minisweagent.group_rm.reward_func
@@ -191,8 +193,7 @@ GAGAR_ARGS=(
    --genrm-model-path "${GAGAR_MODEL_PATH}"
    --genrm-num-gpus 4
    --genrm-num-gpus-per-engine 4
-   --genrm-engine-config '{"context_length": 65536, "mem_fraction_static": 0.8, "cuda_graph_backend_prefill": "disabled"}'
-   --genrm-sampling-config '{"temperature": 0.1, "top_p": 1.0, "max_response_len": 2048, "chat_template_kwargs": {"enable_thinking": false}}'
+   "${GENRM_ARGS[@]}"
 )
 
 # The Ray driver owns server lifetime, readiness and cancellation.

@@ -16,6 +16,8 @@ export EXP_NAME="${EXP_NAME:-gagar-deepcoder-qwen35-4b-think16k-8gpu}"
 export GAGAR_AUDIT_DIR="${GAGAR_AUDIT_DIR:-${SAVE_DIR}/${EXP_NAME}/grader}"
 export GAGAR_MODEL_PATH="${GAGAR_MODEL_PATH:-${MODEL_DIR}/Qwen3.8-27B}"
 RESOURCE='{"actor": [1, 8], "rollout": [1, 4], "genrm": [1, 4]}'
+GENRM_OPTIONS=$(python3 "${SCRIPT_DIR}/app/config.py" --task code_generate --genrm-args)
+readarray -t GENRM_ARGS <<<"${GENRM_OPTIONS}"
 GAGAR_ARGS=(
    # Eight training GPUs: TP2, PP1, CP1, DP4.
    --context-parallel-size 1
@@ -28,8 +30,7 @@ GAGAR_ARGS=(
    --genrm-model-path "${GAGAR_MODEL_PATH}"
    --genrm-num-gpus 4
    --genrm-num-gpus-per-engine 2
-   --genrm-engine-config '{"context_length": 65536, "mem_fraction_static": 0.8, "cuda_graph_backend_prefill": "disabled"}'
-   --genrm-sampling-config '{"temperature": 1.0, "top_p": 0.95, "top_k": 20, "max_response_len": 16384, "chat_template_kwargs": {"enable_thinking": true, "preserve_thinking": false, "reasoning_effort": "xhigh"}}'
+   "${GENRM_ARGS[@]}"
 )
 RUNTIME_ENV_JSON=$(python3 - <<'ENV'
 import json

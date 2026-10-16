@@ -9,17 +9,18 @@ import tempfile
 from pathlib import Path
 
 from examples.gagar.app.code_generate.scoring import grade_to_weights
+from examples.gagar.app.config import load_task_config
 from examples.gagar.core.grs import GraderEnvironment
 
 
 class SandboxBash:
     """Execute model commands inside the already isolated grader sandbox."""
 
-    def __init__(self, manifest: dict) -> None:
+    def __init__(self, manifest: dict, config: dict) -> None:
         # A configuration mistake must never turn this into host bash execution.
         if not os.environ.get("APPTAINER_CONTAINER") or not Path("/candidates").is_dir():
             raise RuntimeError("sandbox grader must run inside its Apptainer instance")
-        self.timeout = manifest.get("command_timeout", 120)
+        self.timeout = manifest.get("command_timeout", config["command_timeout"])
         Path("/workspace").mkdir(exist_ok=True)
 
     def execute(self, action: dict) -> dict:
@@ -69,18 +70,15 @@ class SandboxBash:
         pass
 
 
-def create_environment(manifest: dict) -> GraderEnvironment:
+def create_environment(manifest: dict, config: dict | None = None) -> GraderEnvironment:
     """Bind this task's tools and scoring to the shared grader environment."""
+    if config is None:
+        config = load_task_config("code_generate")["environment"]
     return GraderEnvironment(
         manifest,
-        backend=SandboxBash(manifest),
+        backend=SandboxBash(manifest, config),
         grade_to_weights=grade_to_weights,
-        sections={"code", "test_output"},
-        evidence_access=(
-            "Read code and test_output using read_evidence. Original thinking is not provided. "
-            "Frozen Python files: /candidates/<rollout_n>/solution.py. "
-            "bash(command) runs here in /workspace; use it for bounded experiments. "
-            "Python and the SandboxFusion harness are installed in /opt/sf and /opt/sandboxfusion."
-        ),
-        environment_type="gagar_apptainer_sandbox",
+        sections=set(config["evidence_sections"]),
+        evidence_access=config["evidence_access"],
+        environment_type=config["environment_type"],
     )

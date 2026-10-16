@@ -960,16 +960,20 @@ class AgentServer:
         self.grading_bridge = None
         # Script entrypoint also works from the mini-swe-agent virtualenv.
         sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
+        from examples.gagar.app.config import load_task_config
         from examples.gagar.app.minisweagent.sandbox.bridge import SandboxBridge
+
+        grading = load_task_config("minisweagent")["environment"]
 
         self.grading_bridge = SandboxBridge(
             self.work_dir / "grading",
             shlex.split(os.environ["GAGAR_GRADER_COMMAND"]),
             _tracked_run,
-            concurrency=int(os.environ.get("GAGAR_CONCURRENCY", "4")),
-            retention_seconds=float(os.environ.get("GAGAR_RETENTION_SECONDS", "14400")),
-            grading_seconds=float(os.environ.get("GAGAR_TIMEOUT_SECONDS", "1800")),
-            max_retained_groups=int(os.environ.get("GAGAR_MAX_RETAINED_GROUPS", "32")),
+            concurrency=int(os.environ.get("GAGAR_CONCURRENCY", grading["concurrency"])),
+            retention_seconds=float(os.environ.get("GAGAR_RETENTION_SECONDS", grading["retention_seconds"])),
+            grading_seconds=float(os.environ.get("GAGAR_TIMEOUT_SECONDS", grading["grading_timeout"])),
+            max_retained_groups=int(os.environ.get("GAGAR_MAX_RETAINED_GROUPS", grading["max_retained_groups"])),
+            command_seconds=grading["command_timeout"],
         )
         self._record_ttl = float(os.environ.get("AGENT_SERVER_RECORD_TTL_SECONDS", SESSION_RECORD_TTL_SECONDS))
         threading.Thread(target=self._record_sweep_loop, name="record-sweeper", daemon=True).start()

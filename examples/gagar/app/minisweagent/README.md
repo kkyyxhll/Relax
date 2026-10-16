@@ -1,7 +1,7 @@
 # Mini-swe-agent GAGAR demo
 
 This directory owns the SWE agent server, client, SIF cache, bridge, grader,
-prompts and launch scripts. It does not import or launch another example recipe.
+task adapters and sandbox tools. Prompts and grader settings live in the root `grader.yaml`. It does not import or launch another example recipe.
 The actor still receives the original 0/1 test outcome before group grading.
 
 ## Environment and data
@@ -36,13 +36,13 @@ checks server readiness, forwards cancellation and waits for cleanup.
 
 ## Files
 
-- `run_gagar.sh`: SWE training plus split GenRM; no standalone baseline or PD recipe.
+- `run_minisweagent.sh`: SWE training plus split GenRM; no standalone baseline or PD recipe.
 - `sandbox/driver.sh`: Ray job process supervision.
 - `sandbox/agent_server.py`, `sandbox/agent_client.sh`, `sandbox/agent_config.yaml`: actor execution and original judging.
 - `sandbox/sif_cache.py`, `sandbox/setup_r2e_data_and_sifs.sh`, `sandbox/check_r2e_sifs.py`: local data/image preparation.
 - `group_rm.py`, `sandbox/bridge.py`: existing framework hook and candidate environment routing.
 - `grader.py`, `scoring.py`, `sandbox/git_evidence.py`: grader adapter, weights and frozen actor changes.
-- `grader.yaml`: system prompt; `instance.jinja`: task/outcome/evidence prompt.
+- Root `grader.yaml`, `tasks.minisweagent`: system/instance prompts, environment and GenRM settings.
 
 ## Grading and resource layout
 
@@ -50,14 +50,14 @@ This recipe keeps mini-swe-agent's original binary outcome verification and
 uses Relax's `--group-rm` to request a group grader. The grader's weights feed
 `compute_group_rewards`; Relax performs the final group mean subtraction.
 
-Use the environment and data setup above, then launch this directory's `run_gagar.sh`. It uses split colocate resources: actor 8 GPUs, rollout 4 GPUs and
+Use the environment and data setup above, then launch the root `run_minisweagent.sh`. It uses split colocate resources: actor 8 GPUs, rollout 4 GPUs and
 GenRM 4 GPUs (TP 4), with `GAGAR_MODEL_PATH` defaulting to
 `${MODEL_DIR}/Qwen3.8-27B`. The SWE grader uses a 65,536-token context with
 a 2,048-token reply budget per call. No deferred reward hook or custom
 advantage is used.
 This entry point always enables group grading; no separate SWE baseline is included.
 
-`run_gagar.sh` enables mini-swe-agent's on-demand SIF cache by default (128 GiB,
+`run_minisweagent.sh` enables mini-swe-agent's on-demand SIF cache by default (128 GiB,
 two concurrent builds). Prepare only data and wheels with
 `R2E_SETUP_SKIP_SIFS=1 bash examples/gagar/app/minisweagent/sandbox/setup_r2e_data_and_sifs.sh`;
 the first use of an image builds it into `R2E_SIF_DIR`. Configure cache scratch and registry access with the variables below. `AGENT_SERVER_SIF_CACHE=0` keeps
@@ -83,12 +83,11 @@ original harness, untracked files enter the patch only after they are staged.
 Evidence capture failure still runs the original binary judge; incomplete
 evidence for any passing candidate makes the group fall back to its outcomes.
 
-The default command runs `examples.gagar.app.minisweagent.grader` using the mini-swe-agent
+The default command runs `examples.gagar.app.runner --task minisweagent`, which selects the shared GRS entrypoint from YAML using the mini-swe-agent
 virtualenv. Its `DefaultAgent` loop calls the existing Relax GenRM `/generate`
 API with complete message history. GenRM currently returns text rather than
 native `tool_calls`; the recipe parses one JSON tool action per response,
-without changing the framework API. `GAGAR_CONFIG` can select another grader
-YAML configuration. The default budget is 40 calls and 1500 seconds.
+without changing the framework API. `GAGAR_CONFIG` can select another unified grader YAML configuration. The default budget is 40 calls and 1500 seconds.
 
 Only `bash(rollout_n, command)` can execute model-generated commands. The
 bridge resolves `rollout_n` within the current immutable group and invokes
@@ -175,3 +174,5 @@ Set these variables before submission; the launcher forwards them into the Ray
 job. `sandbox/setup_r2e_data_and_sifs.sh` can also prebuild images when
 `R2E_SETUP_SKIP_SIFS` is unset. This preserves the prebuilt and on-demand paths
 without including another training recipe.
+
+统一配置位于 GAGAR 根目录的 `grader.yaml`，本任务选择 `tasks.minisweagent`。修改 system/instance template、工具超时和推理预算都在该文件中完成，原始 rollout 与判题配置不变。
