@@ -4,11 +4,11 @@
 
 ## 执行流程
 
-`examples/gagar/code_generate/baseline.sh` 保留 baseline 的 SandboxFusion HTTP 判题方式。`run_gagar.sh` 在同一 recipe 上启用 sandbox 模式：每份 Python 答案先在独立 Apptainer 实例里运行原 SandboxFusion 判题器，再由另一个实例里的 mini-swe-agent 比较本组通过的答案。
+`examples/gagar/run_code_generate_baseline.sh` 保留 baseline 的 SandboxFusion HTTP 判题方式。`run_gagar.sh` 在同一 recipe 上启用 sandbox 模式：每份 Python 答案先在独立 Apptainer 实例里运行原 SandboxFusion 判题器，再由另一个实例里的 mini-swe-agent 比较本组通过的答案。
 
 链路：`group_rm → 原始 0/1 判题 → 冻结 code/test_output → agentic grader → weights → compute_group_rewards → Relax 组内减均值`。
 
-- 使用现有 `--group-rm` 和本目录 `group_rm.reward_group`；共享 `grader_common.py` 与 GAGAR 算法。两种任务分别加载各自目录的 `grader.yaml`（system prompt）和 `instance.jinja`（instance prompt）；SWE 继续用 bridge，代码生成使用 grader 自己的 sandbox。
+- 使用现有 `--group-rm` 和本目录 `group_rm.reward_group`；共享 `core/grs.py` 与 GAGAR 算法。两种任务分别加载各自目录的 `grader.yaml`（system prompt）和 `instance.jinja`（instance prompt）；SWE 继续用 bridge，代码生成使用 grader 自己的 sandbox。
 - 代码生成使用本目录的英文 `grader.yaml`：评价效率、简洁清晰程度；必要时读代码、构造输入并运行。直接返回每个通过候选的 `[0,1]` 质量权重和依据，允许 0、并列，也不要求权重和为 1。不使用 SWE 的五项 rubric、分档或 rank-to-weight。
 - instance prompt 提供题目、候选 ID、原始 outcome 和证据读取方式。只提供代码和判题结果，不向 grader 提供 think 或完整 submission；原始回答保留在宿主审计文件。代码和判题结果可分页读取，代码挂在 `/candidates/<rollout_n>/solution.py`，实验写在 `/workspace`。
 - grader 的 bash 只接收 `command`，直接在自身容器里执行；SWE bridge 的 bash 仍要求 `rollout_n`。GenRM 使用 Relax 原有 `/generate`，没有新增模型服务。
@@ -17,9 +17,9 @@
 ### 代码职责
 
 - `group_rm.py`：Relax group RM 入口，准备整组输入、监督 worker，处理取消、质量评分回退与 reward 记录。
-- `sandbox.py`：独立 worker 内的原始判题、grader 容器编排、固定 GenRM 代理、实例租约和清理；也保留 `--cleanup-owner` 定向回收入口。
-- `apptainer.py`：实例启停、tracked child 和 subreaper。
-- `sandbox_env.py`：容器内 bash 执行器，以及本任务证据范围、评分函数与共享 grader 工具的组合。
+- `sandbox/worker.py`：独立 worker 内的原始判题、grader 容器编排、固定 GenRM 代理、实例租约和清理；也保留 `--cleanup-owner` 定向回收入口。
+- `sandbox/apptainer.py`：实例启停、tracked child 和 subreaper。
+- `grader.py`：容器内 bash 执行器，以及本任务证据范围、评分函数与共享 grader 工具的组合。
 - `scoring.py`：代码生成质量权重的校验；`grader.yaml` / `instance.jinja` 分别提供 system / instance prompt。
 
 ### 环境与镜像
@@ -41,7 +41,7 @@ export GAGAR_SANDBOX_IMAGE=/path/to/grader.sif
 mkdir -p "${BUILD_DIR}"
 git clone https://github.com/bytedance/SandboxFusion.git "${BUILD_DIR}/SandboxFusion"
 git -C "${BUILD_DIR}/SandboxFusion" checkout 469de0845cb7d665bc68044d541aa3aa28c5b30a
-cp examples/gagar/code_generate/grader.def examples/gagar/code_generate/sandboxfusion.yaml "${BUILD_DIR}/"
+cp examples/gagar/app/code_generate/sandbox/grader.def examples/gagar/app/code_generate/sandbox/sandboxfusion.yaml "${BUILD_DIR}/"
 (cd "${BUILD_DIR}" && apptainer build "${GAGAR_SANDBOX_IMAGE}" grader.def)
 ```
 
@@ -58,7 +58,7 @@ export MINI_SWE_AGENT_VENV=/path/to/mini-swe-agent-venv
 export GAGAR_MODEL_PATH="${MODEL_DIR}/Qwen3.8-27B"
 export GAGAR_SANDBOX_TMPDIR=/path/to/local-scratch
 export GAGAR_AUDIT_DIR=/path/to/persistent-grader-audit
-RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/code_generate/run_gagar.sh
+RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/run_code_generate.sh
 ```
 
 `MODEL_DIR`、`DATA_DIR`、`SAVE_DIR` 与 baseline 相同；`SANDBOX_URL` 在该模式不需要。配置关闭 GRPO 标准差归一化，保留组内减均值。训练用 `score`，通过率用 `test_reward`，另记录 `quality_weight` 与 `grader_fallback`。
@@ -71,10 +71,10 @@ grader 只有一个当前组的 Unix socket 可访问模型；代理固定转发
 
 每组独立保存 `input.json`、`outcomes.json`、`trajectory.json`、`result.json` 与 `worker.log`。原始判题失败直接报错；只有质量 grader 失败才回退到原始 outcome，且标记 `grader_fallback=1`。
 
-实例由本目录 `apptainer.py` 管理，保留 owner 命名、tracked child、subreaper、优先 graceful stop 与停止校验。它不导入 SWE server、SIF cache 或 SWE 数据依赖。每次 start 前记录实例租约，正常退出删除；取消或异常后父进程再接管、重试清理。若平台调用持续失败，保留 `instances/` 租约和 scratch 并报错，不把清理失败伪装成成功评分。恢复后可在同一节点用记录中的 owner PID 定向重试，不触碰其他组或 SWE 实例：
+实例由本目录 `sandbox/apptainer.py` 管理，保留 owner 命名、tracked child、subreaper、优先 graceful stop 与停止校验。它不导入 SWE server、SIF cache 或 SWE 数据依赖。每次 start 前记录实例租约，正常退出删除；取消或异常后父进程再接管、重试清理。若平台调用持续失败，保留 `instances/` 租约和 scratch 并报错，不把清理失败伪装成成功评分。恢复后可在同一节点用记录中的 owner PID 定向重试，不触碰其他组或 SWE 实例：
 
 ```bash
-"${MINI_SWE_AGENT_VENV}/bin/python" -m examples.gagar.code_generate.sandbox \
+"${MINI_SWE_AGENT_VENV}/bin/python" -m examples.gagar.app.code_generate.sandbox.worker \
   --output /path/to/group-audit/result.json --cleanup-owner OWNER_PID
 ```
 

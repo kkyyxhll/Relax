@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import httpx
 
-from examples.gagar.rewards import reward_records
+from examples.gagar.core.gar import reward_records
 from relax.utils.logging_utils import get_logger
 
 

@@ -3,17 +3,12 @@
 
 """A mini-swe-agent process using Relax GenRM and sandbox-only tools."""
 
-import argparse
-import json
-import os
-from pathlib import Path
 from urllib.parse import quote
 
 import httpx
-import yaml
 
-from examples.gagar.grader_common import GraderEnvironment, run_grader
-from examples.gagar.minisweagent.scoring import grade_to_weights
+from examples.gagar.app.minisweagent.scoring import grade_to_weights
+from examples.gagar.core.grs import GraderEnvironment
 
 
 class BridgeBash:
@@ -25,7 +20,7 @@ class BridgeBash:
         self.url = f"{manifest['bridge_url'].rstrip('/')}/gagar/groups/{group_id}/bash"
         self.client = httpx.Client(timeout=135, trust_env=False)
 
-    def __call__(self, action: dict) -> dict:
+    def execute(self, action: dict) -> dict:
         # Validate the exact model argument set at the bridge, including
         # a missing rollout_n. Never accept an endpoint from the model.
         response = self.client.post(
@@ -36,12 +31,15 @@ class BridgeBash:
         response.raise_for_status()
         return response.json()
 
+    def close(self) -> None:
+        self.client.close()
+
 
 def create_environment(manifest: dict) -> GraderEnvironment:
     """Bind this task's tools and scoring to the shared grader environment."""
     return GraderEnvironment(
         manifest,
-        bash=BridgeBash(manifest),
+        backend=BridgeBash(manifest),
         grade_to_weights=grade_to_weights,
         sections={"patch", "trajectory", "test_output", "submission"},
         evidence_access=(
@@ -50,23 +48,3 @@ def create_environment(manifest: dict) -> GraderEnvironment:
         ),
         environment_type="gagar_sandbox_bridge",
     )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
-    manifest = json.loads(args.input.read_text())
-    config_path = Path(os.environ.get("GAGAR_CONFIG", Path(__file__).with_name("grader.yaml")))
-    config = yaml.safe_load(config_path.read_text())
-    config["agent"].setdefault("instance_template", Path(__file__).with_name("instance.jinja").read_text())
-    env = create_environment(manifest)
-    try:
-        run_grader(manifest, args.output, env, config)
-    finally:
-        env.bash.client.close()
-
-
-if __name__ == "__main__":
-    main()

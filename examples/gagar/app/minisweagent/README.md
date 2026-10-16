@@ -24,24 +24,24 @@ export SAVE_DIR=/path/to/checkpoints
 export R2E_DATA_PATH=/path/to/r2e-data
 export R2E_SIF_DIR=/path/to/sif-cache
 export EXP_ROOT=/path/to/new-experiment
-R2E_SETUP_SKIP_SIFS=1 bash examples/gagar/minisweagent/setup_r2e_data_and_sifs.sh
-RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/minisweagent/run_gagar.sh
+R2E_SETUP_SKIP_SIFS=1 bash examples/gagar/app/minisweagent/sandbox/setup_r2e_data_and_sifs.sh
+RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/run_minisweagent.sh
 ```
 
 `MODEL_DIR` contains Qwen3.5-35B-A3B and, by default, Qwen3.8-27B.
 `GAGAR_MODEL_PATH` can select a different grader path. The setup downloads the
 R2E training/evaluation parquet data and wheels; images are converted on demand.
-The submitter only submits the Ray job. `driver.sh` owns the server and trainer,
+The submitter only submits the Ray job. `sandbox/driver.sh` owns the server and trainer,
 checks server readiness, forwards cancellation and waits for cleanup.
 
 ## Files
 
 - `run_gagar.sh`: SWE training plus split GenRM; no standalone baseline or PD recipe.
-- `driver.sh`: Ray job process supervision.
-- `agent_server.py`, `agent_client.sh`, `agent_config.yaml`: actor execution and original judging.
-- `sif_cache.py`, `setup_r2e_data_and_sifs.sh`, `check_r2e_sifs.py`: local data/image preparation.
-- `group_rm.py`, `bridge.py`: existing framework hook and candidate environment routing.
-- `grader.py`, `scoring.py`, `git_evidence.py`: grader adapter, weights and frozen actor changes.
+- `sandbox/driver.sh`: Ray job process supervision.
+- `sandbox/agent_server.py`, `sandbox/agent_client.sh`, `sandbox/agent_config.yaml`: actor execution and original judging.
+- `sandbox/sif_cache.py`, `sandbox/setup_r2e_data_and_sifs.sh`, `sandbox/check_r2e_sifs.py`: local data/image preparation.
+- `group_rm.py`, `sandbox/bridge.py`: existing framework hook and candidate environment routing.
+- `grader.py`, `scoring.py`, `sandbox/git_evidence.py`: grader adapter, weights and frozen actor changes.
 - `grader.yaml`: system prompt; `instance.jinja`: task/outcome/evidence prompt.
 
 ## Grading and resource layout
@@ -59,7 +59,7 @@ This entry point always enables group grading; no separate SWE baseline is inclu
 
 `run_gagar.sh` enables mini-swe-agent's on-demand SIF cache by default (128 GiB,
 two concurrent builds). Prepare only data and wheels with
-`R2E_SETUP_SKIP_SIFS=1 bash examples/gagar/minisweagent/setup_r2e_data_and_sifs.sh`;
+`R2E_SETUP_SKIP_SIFS=1 bash examples/gagar/app/minisweagent/sandbox/setup_r2e_data_and_sifs.sh`;
 the first use of an image builds it into `R2E_SIF_DIR`. Configure cache scratch and registry access with the variables below. `AGENT_SERVER_SIF_CACHE=0` keeps
 the prebuilt mode. The SIF lease follows the retained sandbox through outcome
 verification and group grading; it is released only after the instance stops.
@@ -83,7 +83,7 @@ original harness, untracked files enter the patch only after they are staged.
 Evidence capture failure still runs the original binary judge; incomplete
 evidence for any passing candidate makes the group fall back to its outcomes.
 
-The default command runs `examples.gagar.minisweagent.grader` using the mini-swe-agent
+The default command runs `examples.gagar.app.minisweagent.grader` using the mini-swe-agent
 virtualenv. Its `DefaultAgent` loop calls the existing Relax GenRM `/generate`
 API with complete message history. GenRM currently returns text rather than
 native `tool_calls`; the recipe parses one JSON tool action per response,
@@ -172,6 +172,6 @@ changes. Reference-patch similarity is not a quality criterion.
 | `AGENT_SERVER_SIF_PROXY`             | unset                              | Proxy used only for image conversion                      |
 
 Set these variables before submission; the launcher forwards them into the Ray
-job. `setup_r2e_data_and_sifs.sh` can also prebuild images when
+job. `sandbox/setup_r2e_data_and_sifs.sh` can also prebuild images when
 `R2E_SETUP_SKIP_SIFS` is unset. This preserves the prebuilt and on-demand paths
 without including another training recipe.

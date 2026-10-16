@@ -24,7 +24,7 @@ make run HOST=0.0.0.0 PORT=8080
 
 ```bash
 export DATA_DIR=/path/to/deepcoder-train
-python examples/gagar/code_generate/prepare_data.py --output-dir "${DATA_DIR}"
+python examples/gagar/app/code_generate/prepare_data.py --output-dir "${DATA_DIR}"
 ```
 
 ## 启动
@@ -33,7 +33,7 @@ python examples/gagar/code_generate/prepare_data.py --output-dir "${DATA_DIR}"
 export MODEL_DIR=/path/to/models  # 包含 Qwen3.5-4B 子目录
 export SAVE_DIR=/path/to/checkpoints
 export SANDBOX_URL=http://sandbox-host:8080
-RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/code_generate/baseline.sh
+RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/run_code_generate_baseline.sh
 ```
 
 | 配置            | 值                                                                   |

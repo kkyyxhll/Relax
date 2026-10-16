@@ -5,7 +5,7 @@ set -eo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 export GAGAR_GRADER_MODE=sandbox
 if [ -z "${RELAX_ENTRYPOINT_MODE:-}" ]; then
-    source "${SCRIPT_DIR}/../../../scripts/entrypoint/local.sh"
+    source "${SCRIPT_DIR}/../../scripts/entrypoint/local.sh"
 fi
 : "${MODEL_DIR:?Set MODEL_DIR to the model root}"
 : "${SAVE_DIR:?Set SAVE_DIR to a persistent checkpoint root}"
@@ -20,7 +20,7 @@ GAGAR_ARGS=(
    # Eight training GPUs: TP2, PP1, CP1, DP4.
    --context-parallel-size 1
    --group-rm
-   --custom-rm-path examples.gagar.code_generate.group_rm.reward_group
+   --custom-rm-path examples.gagar.app.code_generate.group_rm.reward_group
    --reward-key score
    --eval-reward-key test_reward
    --reward-max-concurrency 2
@@ -43,4 +43,4 @@ print(json.dumps(runtime))
 ENV
 )
 export RESOURCE RUNTIME_ENV_JSON
-exec bash "${SCRIPT_DIR}/baseline.sh" "${GAGAR_ARGS[@]}" "$@"
+exec bash "${SCRIPT_DIR}/run_code_generate_baseline.sh" "${GAGAR_ARGS[@]}" "$@"

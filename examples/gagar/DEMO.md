@@ -5,23 +5,23 @@ prompts, scoring adapter and launch scripts. Only the arithmetic, reward record
 format and mini-swe grader loop are shared. No core GenRM or other recipe changes
 are required.
 
-| Task            | Entry point                                              | Model commands                            | System / instance prompts                                                      |
-| --------------- | -------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| Code generation | [code_generate/run_gagar.sh](code_generate/run_gagar.sh) | `bash(command)` in the grader sandbox     | [system](code_generate/grader.yaml) / [instance](code_generate/instance.jinja) |
-| SWE             | [minisweagent/run_gagar.sh](minisweagent/run_gagar.sh)   | `bash(rollout_n, command)` via the bridge | [system](minisweagent/grader.yaml) / [instance](minisweagent/instance.jinja)   |
+| Task            | Entry point                                  | Model commands                            | System / instance prompts                                                              |
+| --------------- | -------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| Code generation | [run_code_generate.sh](run_code_generate.sh) | `bash(command)` in the grader sandbox     | [system](app/code_generate/grader.yaml) / [instance](app/code_generate/instance.jinja) |
+| SWE             | [run_minisweagent.sh](run_minisweagent.sh)   | `bash(rollout_n, command)` via the bridge | [system](app/minisweagent/grader.yaml) / [instance](app/minisweagent/instance.jinja)   |
 
-Code generation also includes its [0/1 baseline](code_generate/BASELINE.md).
+Code generation also includes its [0/1 baseline](app/code_generate/BASELINE.md).
 The SWE directory contains the GAGAR version only, including its own server and
 on-demand SIF cache. It preserves original train/eval judging and lifecycle safeguards.
 
-Code generation enters through `code_generate/group_rm.py`, which supervises
-the separate `sandbox.py` worker. SWE enters through `minisweagent/group_rm.py`
+Code generation enters through `app/code_generate/group_rm.py`, which supervises
+the separate `sandbox/worker.py` worker. SWE enters through `app/minisweagent/group_rm.py`
 and asks the bridge to run the grader against retained candidate environments.
 Both entry points return the shared reward records without changing the original
 outcome judging or sandbox cleanup rules.
 
-Setup and launch details: [code generation](code_generate/README.md) ·
-[SWE](minisweagent/README.md).
+Setup and launch details: [code generation](app/code_generate/README.md) ·
+[SWE](app/minisweagent/README.md).
 
 ## Execution flow
 
@@ -53,7 +53,7 @@ flowchart TD
   Q --> U[Export audit; stop grader instance]
 ```
 
-`grader_common.py` owns the agent loop and the shared `read_evidence` /
+`core/grs.py` owns the agent loop and the shared `read_evidence` /
 `submit_grades` dispatch. Each task composes it with its own bash executor,
 evidence sections, scoring function and prompts.
 
@@ -67,7 +67,7 @@ not a live terminal or a rerun of this branch.
 
 ## Shared model messages
 
-`grader_common.py` sends complete `role/content` histories to the existing GenRM
+`core/grs.py` sends complete `role/content` histories to the existing GenRM
 endpoint. When thinking is enabled, the assistant content contains its reasoning
 inside `<think>...</think>`, followed by the tool action. The parser executes only
 the final action. The code-generation Qwen configuration sets
@@ -76,3 +76,14 @@ Malformed/incomplete output still follows format feedback and the existing budge
 there is no constrained JSON decoding.
 
 The replay demonstrates execution and scoring evidence, not a convergence advantage.
+
+## Layout and grader entry point
+
+`core/gar.py` owns the pure reward conversion and reward records.
+`core/grs.py` owns the mini-swe-agent loop and the `execute` / `close` backend
+interface. Task adapters and sandbox implementations live in `app/`.
+`run_grs.sh --task code_generate|minisweagent --input INPUT --output OUTPUT`
+runs one already-prepared grader session using `MINI_SWE_AGENT_VENV`.
+The code-generation worker invokes the same Python entry point inside its
+container; SWE invokes it with a bridge connection. The original worker and
+bridge continue to own provisioning, cancellation and final sandbox cleanup.

@@ -7,7 +7,7 @@ if ((BASH_VERSINFO[0] < 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] < 1))); 
    exit 1
 fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-RELAX_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+RELAX_DIR="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 cd "${RELAX_DIR}"
 AGENT_SERVER_PID=""
 TRAIN_PID=""

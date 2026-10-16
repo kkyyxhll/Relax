@@ -7,7 +7,7 @@ set -o pipefail
 
 TIMESTAMP=$(date "+%Y-%m-%d-%H:%M:%S")
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-RELAX_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+RELAX_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 if [ -z "${MODEL_DIR:-}" ] || [ -z "${SAVE_DIR:-}" ] || [ -z "${R2E_DATA_PATH:-}" ] || [ -z "${R2E_SIF_DIR:-}" ] || [ -z "${EXP_ROOT:-}" ]; then
    echo "ERROR: MODEL_DIR, SAVE_DIR, R2E_DATA_PATH, R2E_SIF_DIR, and EXP_ROOT must be set." >&2
@@ -23,7 +23,7 @@ fi
 export AGENT_SERVER_SIF_CACHE="${AGENT_SERVER_SIF_CACHE:-1}"
 export AGENT_SERVER_SIF_CACHE_GB="${AGENT_SERVER_SIF_CACHE_GB:-128}"
 export AGENT_SERVER_SIF_BUILD_CONCURRENCY="${AGENT_SERVER_SIF_BUILD_CONCURRENCY:-2}"
-export GAGAR_GRADER_COMMAND="${GAGAR_GRADER_COMMAND:-\"${MINI_SWE_AGENT_VENV}/bin/python\" -m examples.gagar.minisweagent.grader}"
+export GAGAR_GRADER_COMMAND="${GAGAR_GRADER_COMMAND:-\"${MINI_SWE_AGENT_VENV}/bin/python\" -m examples.gagar.core.grs --task minisweagent}"
 export GAGAR_MODEL_PATH="${GAGAR_MODEL_PATH:-${MODEL_DIR}/Qwen3.8-27B}"
 export PYTHONPATH="${RELAX_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
@@ -185,7 +185,7 @@ RAY_RESOURCE_ARGS=(
 
 GAGAR_ARGS=(
    --group-rm
-   --custom-rm-path examples.gagar.minisweagent.group_rm.reward_func
+   --custom-rm-path examples.gagar.app.minisweagent.group_rm.reward_func
    --reward-key score
    --eval-reward-key test_reward
    --genrm-model-path "${GAGAR_MODEL_PATH}"
@@ -213,13 +213,13 @@ env["RAY_JOB_STOP_WAIT_TIME_S"] = "180"
 print(json.dumps(runtime))
 ENV
 )
-TRAIN_COMMAND=(bash "${SCRIPT_DIR}/driver.sh")
+TRAIN_COMMAND=(bash "${SCRIPT_DIR}/app/minisweagent/sandbox/driver.sh")
 
 # agentic rollout: agent exec + parsers ──────────────────────────────────────────────────────────────
 AGENTIC_ARGS=(
    --use-agentic-rollout
-   --agent-command "bash ${SCRIPT_DIR}/agent_client.sh"
-   --agent-cwd "${SCRIPT_DIR}"
+   --agent-command "bash ${SCRIPT_DIR}/app/minisweagent/sandbox/agent_client.sh"
+   --agent-cwd "${SCRIPT_DIR}/app/minisweagent/sandbox"
    --agent-timeout 7200
    --agent-env "AGENT_SERVER_URL=${AGENT_SERVER_URL}" "AGENT_CLIENT_TRACE_DIR=${AGENT_SERVER_WORK_DIR}/client_events"
    --agentic-tool-call-parser qwen3_coder

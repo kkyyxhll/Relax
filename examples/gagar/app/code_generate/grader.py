@@ -2,18 +2,14 @@
 
 """Local tools for the grader process that already lives inside Apptainer."""
 
-import argparse
-import json
 import os
 import signal
 import subprocess
 import tempfile
 from pathlib import Path
 
-import yaml
-
-from examples.gagar.code_generate.scoring import grade_to_weights
-from examples.gagar.grader_common import GraderEnvironment, run_grader
+from examples.gagar.app.code_generate.scoring import grade_to_weights
+from examples.gagar.core.grs import GraderEnvironment
 
 
 class SandboxBash:
@@ -26,7 +22,7 @@ class SandboxBash:
         self.timeout = manifest.get("command_timeout", 120)
         Path("/workspace").mkdir(exist_ok=True)
 
-    def __call__(self, action: dict) -> dict:
+    def execute(self, action: dict) -> dict:
         if set(action) != {"name", "command"} or not isinstance(action["command"], str):
             raise ValueError("bash accepts only name and command; use /candidates/<rollout_n>/solution.py")
         # Neither host credentials nor the inference socket configuration
@@ -68,12 +64,16 @@ class SandboxBash:
             text = output.read(12000).decode(errors="replace")
         return {"output": text, "returncode": -1 if timed_out else proc.returncode, "timed_out": timed_out}
 
+    def close(self) -> None:
+        # Container ownership and command-process cleanup stay with the worker.
+        pass
+
 
 def create_environment(manifest: dict) -> GraderEnvironment:
     """Bind this task's tools and scoring to the shared grader environment."""
     return GraderEnvironment(
         manifest,
-        bash=SandboxBash(manifest),
+        backend=SandboxBash(manifest),
         grade_to_weights=grade_to_weights,
         sections={"code", "test_output"},
         evidence_access=(
@@ -84,19 +84,3 @@ def create_environment(manifest: dict) -> GraderEnvironment:
         ),
         environment_type="gagar_apptainer_sandbox",
     )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
-    manifest = json.loads(args.input.read_text())
-    config = yaml.safe_load(Path(__file__).with_name("grader.yaml").read_text())
-    config["agent"].setdefault("instance_template", Path(__file__).with_name("instance.jinja").read_text())
-    env = create_environment(manifest)
-    run_grader(manifest, args.output, env, config)
-
-
-if __name__ == "__main__":
-    main()

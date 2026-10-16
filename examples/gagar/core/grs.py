@@ -2,13 +2,17 @@
 
 """Shared mini-swe-agent loop, GenRM client and frozen-evidence tools."""
 
+import argparse
+import importlib
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
+import yaml
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.exceptions import FormatError, Submitted
 
@@ -292,6 +296,14 @@ def submit_result(result: dict) -> None:
     )
 
 
+class GraderBackend(Protocol):
+    """Task-owned command execution and release of its grader tool session."""
+
+    def execute(self, action: dict) -> dict: ...
+
+    def close(self) -> None: ...
+
+
 class GraderEnvironment:
     """Shared evidence and submission tools with task-owned bash and
     scoring."""
@@ -300,14 +312,14 @@ class GraderEnvironment:
         self,
         manifest: dict,
         *,
-        bash: Callable[[dict], dict],
+        backend: GraderBackend,
         grade_to_weights: Callable[[list[float], dict], dict],
         sections: set[str],
         evidence_access: str,
         environment_type: str,
     ) -> None:
         self.manifest = manifest
-        self.bash = bash
+        self.backend = backend
         self.grade_to_weights = grade_to_weights
         self.sections = sections
         self.evidence_access = evidence_access
@@ -317,7 +329,7 @@ class GraderEnvironment:
         try:
             name = action["name"]
             if name == "bash":
-                return self.bash(action)
+                return self.backend.execute(action)
             if name == "read_evidence":
                 return read_evidence(self.manifest, action, self.sections)
             if name == "submit_grades":
@@ -326,6 +338,9 @@ class GraderEnvironment:
             raise ValueError("unknown tool")
         except (ValueError, KeyError, TypeError, httpx.HTTPError) as exc:
             return {"output": f"Tool rejected: {exc}", "returncode": -1}
+
+    def close(self) -> None:
+        self.backend.close()
 
     def get_template_vars(self, **kwargs: Any) -> dict:
         return {"evidence_access": self.evidence_access}
@@ -379,3 +394,26 @@ def run_grader(manifest: dict, output: Path, env: Any, config: dict) -> None:
             output.with_name("summary.json").write_text(json.dumps(summary, indent=2))
         except OSError:
             model.record("diagnostics_error", file="summary.json")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run one task's agentic grader using Relax GenRM.")
+    parser.add_argument("--task", choices=("code_generate", "minisweagent"), required=True)
+    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    task = importlib.import_module(f"examples.gagar.app.{args.task}.grader")
+    directory = Path(task.__file__).parent
+    config_path = Path(os.environ.get("GAGAR_CONFIG", directory / "grader.yaml"))
+    config = yaml.safe_load(config_path.read_text())
+    config["agent"].setdefault("instance_template", (directory / "instance.jinja").read_text())
+    manifest = json.loads(args.input.read_text())
+    env = task.create_environment(manifest)
+    try:
+        run_grader(manifest, args.output, env, config)
+    finally:
+        env.close()
+
+
+if __name__ == "__main__":
+    main()

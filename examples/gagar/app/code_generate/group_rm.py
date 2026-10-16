@@ -11,8 +11,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from examples.gagar.code_generate.sandbox import SandboxCleanupError, cleanup_scratch, write_json
-from examples.gagar.code_generate.scoring import grade_to_weights
+from examples.gagar.app.code_generate.sandbox.worker import SandboxCleanupError, cleanup_scratch, write_json
+from examples.gagar.app.code_generate.scoring import grade_to_weights
 
 
 async def finish_worker(proc: Any, python: str, directory: Path, log: Any) -> None:
@@ -33,7 +33,7 @@ async def finish_worker(proc: Any, python: str, directory: Path, log: Any) -> No
         cleanup = await asyncio.create_subprocess_exec(
             python,
             "-m",
-            "examples.gagar.code_generate.sandbox",
+            "examples.gagar.app.code_generate.sandbox.worker",
             "--output",
             str(directory / "result.json"),
             "--cleanup-owner",
@@ -54,7 +54,7 @@ async def finish_worker(proc: Any, python: str, directory: Path, log: Any) -> No
 
 
 async def reward_group(args: Any, samples: list[Any], **kwargs: Any) -> list[dict]:
-    from examples.gagar.rewards import reward_records
+    from examples.gagar.core.gar import reward_records
     from relax.utils.logging_utils import get_logger
     from relax.utils.utils import get_serve_url
 
@@ -81,7 +81,7 @@ async def reward_group(args: Any, samples: list[Any], **kwargs: Any) -> list[dic
         proc = await asyncio.create_subprocess_exec(
             python,
             "-m",
-            "examples.gagar.code_generate.sandbox",
+            "examples.gagar.app.code_generate.sandbox.worker",
             "--input",
             str(directory / "input.json"),
             "--output",

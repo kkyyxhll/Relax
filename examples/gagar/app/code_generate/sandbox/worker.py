@@ -20,8 +20,8 @@ from typing import Any, Iterator
 
 import httpx
 
-from examples.gagar.code_generate.app.reward import extract_code, judge_request, outcome_from_result
-from examples.gagar.code_generate.scoring import grade_to_weights
+from examples.gagar.app.code_generate.reward import extract_code, judge_request, outcome_from_result
+from examples.gagar.app.code_generate.scoring import grade_to_weights
 
 
 class SandboxCleanupError(Exception):
@@ -108,7 +108,7 @@ def process_environment(tmp_dir: Path) -> dict[str, str]:
 
 @contextmanager
 def instance(image: str, tmp_dir: Path, mounts: dict[Path, str], leases: Path) -> Iterator[Any]:
-    from examples.gagar.code_generate.apptainer import (
+    from examples.gagar.app.code_generate.sandbox.apptainer import (
         ApptainerInstanceEnvironment,
         _new_instance_name,
         _stop_apptainer_instance,
@@ -161,7 +161,7 @@ def instance(image: str, tmp_dir: Path, mounts: dict[Path, str], leases: Path) -
 
 def cleanup_leases(leases: Path, owner: int) -> None:
     """A fresh host worker can retry cleanup after the grading worker exits."""
-    from examples.gagar.code_generate.apptainer import _instance_owner_pid, _stop_apptainer_instance
+    from examples.gagar.app.code_generate.sandbox.apptainer import _instance_owner_pid, _stop_apptainer_instance
 
     for lease in leases.glob("mswe-*"):
         if _instance_owner_pid(lease.name) != owner:
@@ -188,7 +188,7 @@ def cleanup_scratch(directory: Path, owner: int) -> None:
 
 def execute(env: Any, argv: list[str], timeout: int) -> str:
     """Only fixed harness commands cross this host/container boundary."""
-    from examples.gagar.code_generate.apptainer import _tracked_run
+    from examples.gagar.app.code_generate.sandbox.apptainer import _tracked_run
 
     # Limits apply to all descendants, including commands launched by the grader.
     command = (
@@ -237,11 +237,11 @@ def write_json(path: Path, value: Any) -> None:
 
 def run_group(payload: dict, output: Path) -> None:
     """Runs in the mini-swe-agent venv, never in the training process."""
-    from examples.gagar.code_generate.apptainer import _drain_orphans, _install_child_subreaper_and_reaper
+    from examples.gagar.app.code_generate.sandbox.apptainer import _drain_orphans, _install_child_subreaper_and_reaper
 
     _install_child_subreaper_and_reaper()
     image = os.environ["GAGAR_SANDBOX_IMAGE"]
-    code_root = Path(__file__).resolve().parents[1]
+    code_root = Path(__file__).resolve().parents[3]
     scratch_root = os.environ.get("GAGAR_SANDBOX_TMPDIR")
     if scratch_root:
         Path(scratch_root).mkdir(parents=True, exist_ok=True)
@@ -274,7 +274,7 @@ def run_group(payload: dict, output: Path) -> None:
                             [
                                 "/opt/sf/bin/python",
                                 "-m",
-                                "examples.gagar.code_generate.app.sandbox_fusion",
+                                "examples.gagar.app.code_generate.sandbox.sandbox_fusion",
                                 "/input/request.json",
                             ],
                             180,
@@ -332,7 +332,9 @@ def run_group(payload: dict, output: Path) -> None:
                             [
                                 "/opt/grader/bin/python",
                                 "-m",
-                                "examples.gagar.code_generate.sandbox_env",
+                                "examples.gagar.core.grs",
+                                "--task",
+                                "code_generate",
                                 "--input",
                                 "/input/manifest.json",
                                 "--output",

@@ -800,7 +800,7 @@ class MyAgent(DefaultAgent):
         if setup_result.get("returncode") != 0 or setup_result.get("exception_info"):
             raise RuntimeError(_format_command_result("setup", setup_result))
         if self.capture_evidence:
-            from examples.gagar.minisweagent.git_evidence import capture_baseline, capture_patch
+            from examples.gagar.app.minisweagent.sandbox.git_evidence import capture_baseline, capture_patch
 
             capture_baseline(self.env, self.grading_evidence)
         try:
@@ -959,8 +959,8 @@ class AgentServer:
         self._pending_sif_cleanup: set[str] = set()
         self.grading_bridge = None
         # Script entrypoint also works from the mini-swe-agent virtualenv.
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-        from examples.gagar.minisweagent.bridge import SandboxBridge
+        sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
+        from examples.gagar.app.minisweagent.sandbox.bridge import SandboxBridge
 
         self.grading_bridge = SandboxBridge(
             self.work_dir / "grading",
@@ -1342,7 +1342,7 @@ def main() -> None:
 
     app = Flask(__name__)
     if server.grading_bridge is not None:
-        from examples.gagar.minisweagent.bridge import register_routes
+        from examples.gagar.app.minisweagent.sandbox.bridge import register_routes
 
         register_routes(app, server.grading_bridge)
 
