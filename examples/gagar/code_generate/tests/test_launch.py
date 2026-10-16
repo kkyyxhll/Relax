@@ -15,11 +15,11 @@ import pytest
 @pytest.mark.parametrize("sandbox", [False, True])
 @pytest.mark.parametrize("direct", [False, True])
 def test_code_generation_wrapper_preserves_baseline_and_selects_split_genrm(tmp_path, sandbox, direct):
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[4]
     if direct:
         isolated = tmp_path / "recipe"
         for name in [
-            "examples/code_generate/baseline.sh",
+            "examples/gagar/code_generate/baseline.sh",
             "examples/gagar/code_generate/run_gagar.sh",
             "scripts/models/qwen35-4B.sh",
         ]:
@@ -62,7 +62,7 @@ def test_code_generation_wrapper_preserves_baseline_and_selects_split_genrm(tmp_
     if direct:
         env.pop("RELAX_ENTRYPOINT_MODE")
         env.pop("NCCL_NVLS_ENABLE", None)
-    script = "examples/gagar/code_generate/run_gagar.sh" if sandbox else "examples/code_generate/baseline.sh"
+    script = "examples/gagar/code_generate/run_gagar.sh" if sandbox else "examples/gagar/code_generate/baseline.sh"
     subprocess.run(["bash", str(root / script)], env=env, check=True, capture_output=True, text=True)
     args = json.loads(capture.read_text())
 
@@ -77,10 +77,10 @@ def test_code_generation_wrapper_preserves_baseline_and_selects_split_genrm(tmp_
     assert resource["actor"] == [1, 8]
     assert ("--group-rm" in args) is sandbox
     assert ("--disable-grpo-std-normalization" in args) is sandbox
-    assert value("--context-parallel-size") == ("1" if sandbox else "2")
+    assert value("--context-parallel-size") == "1"
     if sandbox:
         assert resource == {"actor": [1, 8], "rollout": [1, 4], "genrm": [1, 4]}
-        assert value("--custom-rm-path") == "examples.gagar.group_rm.reward_func"
+        assert value("--custom-rm-path") == "examples.gagar.code_generate.sandbox.reward_group"
         assert value("--reward-key") == "score"
         assert value("--eval-reward-key") == "test_reward"
         runtime = json.loads(next(arg.split("=", 1)[1] for arg in args if arg.startswith("--runtime-env-json=")))
@@ -89,4 +89,4 @@ def test_code_generation_wrapper_preserves_baseline_and_selects_split_genrm(tmp_
         assert runtime["env_vars"]["GAGAR_SANDBOX_IMAGE"] == env["GAGAR_SANDBOX_IMAGE"]
     else:
         assert resource == {"actor": [1, 8], "rollout": [1, 8]}
-        assert value("--custom-rm-path") == "examples.code_generate.app.reward.reward"
+        assert value("--custom-rm-path") == "examples.gagar.code_generate.app.reward.reward"

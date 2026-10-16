@@ -80,7 +80,7 @@ while true; do
 done
 
 if [ "${STATUS}" = "completed" ]; then
-   jq --arg server_url "${AGENT_SERVER_URL}" '{metadata:({exit_status:.agent_exit_status,submission:.submission,n_calls:.n_calls} + (if .gagar then {gagar:(.gagar + {server_url:$server_url})} else {} end)),reward:.reward}' "${RESULT_JSON}" \
+   jq '{metadata:{exit_status:.agent_exit_status,submission:.submission,n_calls:.n_calls},reward:.reward}' "${RESULT_JSON}" \
       > "${RELAX_OUTPUT_JSON}"
 else
    trace_result

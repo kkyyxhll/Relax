@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from examples.code_generate.app.reward import extract_code, judge_request, outcome_from_result
+from examples.gagar.code_generate.app.reward import extract_code, judge_request, outcome_from_result
 
 
 def test_final_code_extraction_preserves_baseline_contract():
@@ -26,7 +26,7 @@ def test_infrastructure_failure_is_not_an_incorrect_solution():
 
 @pytest.mark.parametrize("subset", ["primeintellect", "taco", "lcbv5"])
 def test_prepared_task_preserves_problem_and_starter(subset):
-    from examples.code_generate.prepare_data import convert_row
+    from examples.gagar.code_generate.prepare_data import convert_row
 
     row = {
         "problem": "Print the literal text <think>.",

@@ -48,8 +48,6 @@ mkdir -p "${SAVE_DIR}" "${EXP_ROOT}/dump" "${AGENT_SERVER_WORK_DIR}"
 DUMMY_DATA="${SAVE_DIR}/relax_dummy.jsonl"
 seq 50 | sed 's/.*/{"input":[{"role":"user","content":""}]}/' > "${DUMMY_DATA}"
 
-# The GAGAR Ray driver starts and owns its server after submission.
-if [[ "${ENABLE_GAGAR:-0}" != "1" ]]; then
 (
    # Per-run log: each launch writes its own timestamped server log so runs no
    # longer share (and interleave into) a single server.log -- that made
@@ -88,7 +86,6 @@ stop_agent_server() {
    wait "${AGENT_SERVER_PID}" 2>/dev/null || true
 }
 trap stop_agent_server EXIT
-fi
 
 CKPT_ARGS=(
    --hf-checkpoint ${MODEL_DIR}/Qwen3.5-35B-A3B
@@ -218,48 +215,6 @@ RAY_RESOURCE_ARGS=(
    # --use-health-check
 )
 
-# GAGAR uses the existing group RM and split-bundle GenRM service. All normal
-# mini-swe-agent settings above remain the default when ENABLE_GAGAR is unset.
-GAGAR_ARGS=()
-if [[ "${ENABLE_GAGAR:-0}" == "1" ]]; then
-   RAY_RESOURCE_ARGS[1]='{"actor": [1, 8], "rollout": [1, 4], "genrm": [1, 4]}'
-   GAGAR_ARGS=(
-      --group-rm
-      --custom-rm-path examples.gagar.group_rm.reward_func
-      --reward-key score
-      --eval-reward-key test_reward
-      --genrm-model-path "${GAGAR_MODEL_PATH}"
-      --genrm-num-gpus 4
-      --genrm-num-gpus-per-engine 4
-      --genrm-engine-config '{"context_length": 65536, "mem_fraction_static": 0.8, "cuda_graph_backend_prefill": "disabled"}'
-      --genrm-sampling-config '{"temperature": 0.1, "top_p": 1.0, "max_response_len": 2048, "chat_template_kwargs": {"enable_thinking": false}}'
-   )
-fi
-
-# Reuse the existing PD driver's process supervision, with the arguments above
-# still selecting the regular TP4 rollout and split GenRM engines.
-TRAIN_COMMAND=(python3 -m relax.entrypoints.train)
-if [[ "${ENABLE_GAGAR:-0}" == "1" ]]; then
-   export AGENT_SERVER_HOST=127.0.0.1 AGENT_SERVER_PORT=8765
-   export AGENT_SERVER_URL AGENT_SERVER_WORK_DIR
-   export AGENT_SERVER_TRAIN_CONCURRENCY AGENT_SERVER_EVAL_CONCURRENCY
-   export AGENT_SERVER_SHUFFLE AGENT_SERVER_SEED
-   export AGENT_SERVER_REWARD_CONCURRENCY="${AGENT_SERVER_REWARD_CONCURRENCY:-24}"
-   RUNTIME_ENV_JSON=$(python3 - <<'ENV'
-import json
-import os
-runtime = json.loads(os.environ["RUNTIME_ENV_JSON"])
-keys = {"ENABLE_GAGAR", "MINI_SWE_AGENT_VENV", "R2E_DATA_PATH", "R2E_SIF_DIR"}
-keys.update(key for key in os.environ if key.startswith(("AGENT_SERVER_", "GAGAR_")))
-env = runtime.setdefault("env_vars", {})
-env.update({key: os.environ[key] for key in keys})
-env["RAY_JOB_STOP_WAIT_TIME_S"] = "180"
-print(json.dumps(runtime))
-ENV
-   )
-   TRAIN_COMMAND=(bash "${SCRIPT_DIR}/run_mini_swe_agent_pd.sh" --ray-driver)
-fi
-
 # agentic rollout: agent exec + parsers ──────────────────────────────────────────────────────────────
 AGENTIC_ARGS=(
    --use-agentic-rollout
@@ -285,7 +240,7 @@ fi
 mkdir -p logs
 ray job submit ${RAY_NO_WAIT:+--no-wait} --address="http://127.0.0.1:8265" \
    --runtime-env-json="${RUNTIME_ENV_JSON}" \
-   -- "${TRAIN_COMMAND[@]}" \
+   -- python3 -m relax.entrypoints.train \
    "${RAY_RESOURCE_ARGS[@]}" \
    "${MODEL_ARGS[@]}" \
    "${CKPT_ARGS[@]}" \
@@ -296,6 +251,5 @@ ray job submit ${RAY_NO_WAIT:+--no-wait} --address="http://127.0.0.1:8265" \
    "${LOG_ARGS[@]}" \
    "${SGLANG_ARGS[@]}" \
    "${AGENTIC_ARGS[@]}" \
-   "${GAGAR_ARGS[@]}" \
    "${MEGATRON_ARGS[@]}" \
    2>&1 | tee "logs/${EXP_NAME}.log"

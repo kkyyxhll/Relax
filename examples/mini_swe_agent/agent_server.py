@@ -10,16 +10,13 @@ import logging
 import os
 import random
 import re
-import shlex
 import shutil
 import signal
 import subprocess
-import sys
 import tempfile
 import threading
 import time
 import uuid
-from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -36,12 +33,6 @@ from minisweagent.environments.singularity import SingularityEnvironment, Singul
 from minisweagent.exceptions import FormatError, Submitted
 from minisweagent.models.litellm_model import LitellmModel
 from minisweagent.utils.serialize import recursive_merge
-
-
-if __package__:
-    from .sif_cache import SifCache
-else:
-    from sif_cache import SifCache
 
 
 if TYPE_CHECKING:
@@ -100,14 +91,8 @@ def _unregister_child(pid: int) -> None:
         _owned_child_pids.discard(pid)
 
 
-def _kill_and_wait(proc: subprocess.Popen, *, process_group: bool = False) -> None:
-    if process_group:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-    else:
-        proc.kill()
+def _kill_and_wait(proc: subprocess.Popen) -> None:
+    proc.kill()
     try:
         proc.wait(timeout=CHILD_KILL_WAIT_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
@@ -115,12 +100,7 @@ def _kill_and_wait(proc: subprocess.Popen, *, process_group: bool = False) -> No
 
 
 def _tracked_run(
-    cmd: list[str],
-    *,
-    check: bool = False,
-    timeout: float | None = None,
-    cancel_event: threading.Event | None = None,
-    **kwargs: Any,
+    cmd: list[str], *, check: bool = False, timeout: float | None = None, **kwargs: Any
 ) -> subprocess.CompletedProcess:
     """Drop-in for the subset of ``subprocess.run`` this module uses, but the
     child pid is registered in ``_owned_child_pids`` for the whole wait so the
@@ -131,26 +111,12 @@ def _tracked_run(
     _register_child(proc.pid)
     try:
         try:
-            if cancel_event is None:
-                stdout, stderr = proc.communicate(timeout=timeout)
-            else:
-                deadline = time.monotonic() + timeout if timeout is not None else float("inf")
-                while True:
-                    if cancel_event.is_set():
-                        raise RuntimeError("command cancelled")
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise subprocess.TimeoutExpired(cmd, timeout)
-                    try:
-                        stdout, stderr = proc.communicate(timeout=min(0.2, remaining))
-                        break
-                    except subprocess.TimeoutExpired:
-                        continue
+            stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired as exc:
-            _kill_and_wait(proc, process_group=kwargs.get("start_new_session", False))
+            _kill_and_wait(proc)
             raise subprocess.TimeoutExpired(cmd, timeout, output=exc.output, stderr=exc.stderr) from None
         except BaseException:
-            _kill_and_wait(proc, process_group=kwargs.get("start_new_session", False))
+            _kill_and_wait(proc)
             raise
         retcode = proc.returncode
     finally:
@@ -609,24 +575,14 @@ def _swebench_reward(row: dict[str, Any], output: str) -> float:
 
 
 class ApptainerInstanceEnvironment(SingularityEnvironment):
-    def __init__(
-        self,
-        *,
-        tmp_dir: Path,
-        instance_name: str | None = None,
-        release_sif: Callable[[], None] | None = None,
-        process_env: dict[str, str] | None = None,
-        **kwargs: Any,
-    ):
+    def __init__(self, *, tmp_dir: Path, instance_name: str | None = None, **kwargs: Any):
         # instance_name may be supplied by the caller so it can stop a leaked
         # instance even if this constructor raises AFTER `_build_sandbox` has
         # already `instance start`ed one (in that case `env` is never bound in
         # the caller, so `env.cleanup()` would be skipped -> instance leak).
         self.instance_name = instance_name or _new_instance_name()
-        self._cleanup_lock = threading.Lock()
-        self._release_sif = release_sif
         self.apptainer_env = {
-            **(os.environ if process_env is None else process_env),
+            **os.environ,
             "TMPDIR": str(tmp_dir),
             "APPTAINER_TMPDIR": str(tmp_dir),
             "APPTAINER_DISABLE_CACHE": "true",
@@ -674,9 +630,7 @@ class ApptainerInstanceEnvironment(SingularityEnvironment):
                 time.sleep(min(5.0, 1.0 + attempt))
         raise RuntimeError(f"Apptainer instance start failed.\n{last_error}")
 
-    def execute(
-        self, action: dict, cwd: str = "", *, timeout: int | None = None, check_finished: bool = True
-    ) -> dict[str, Any]:
+    def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         command = action["command"]
         cmd = [self.config.executable, *self.config.global_args, "exec"]
         work_dir = cwd or self.config.cwd
@@ -712,8 +666,7 @@ class ApptainerInstanceEnvironment(SingularityEnvironment):
                 "exception_info": f"An error occurred while executing the command: {error}",
                 "extra": {"exception_type": type(error).__name__, "exception": str(error)},
             }
-        if check_finished:
-            self._check_finished(output)
+        self._check_finished(output)
         return output
 
     def _check_finished(self, output: dict) -> None:
@@ -742,16 +695,12 @@ class ApptainerInstanceEnvironment(SingularityEnvironment):
                 )
 
     def cleanup(self) -> None:
-        with self._cleanup_lock:
-            if self.instance_name:
-                instance_name = self.instance_name
-                error = _stop_apptainer_instance(self.config.executable, self.config.global_args, instance_name)
-                if error:
-                    raise RuntimeError(f"failed to stop Apptainer instance {instance_name}: {error}")
-                self.instance_name = ""
-            if self._release_sif is not None:
-                self._release_sif()
-                self._release_sif = None
+        if self.instance_name:
+            instance_name = self.instance_name
+            error = _stop_apptainer_instance(self.config.executable, self.config.global_args, instance_name)
+            if error:
+                raise RuntimeError(f"failed to stop Apptainer instance {instance_name}: {error}")
+            self.instance_name = ""
 
 
 class MyLitellmModel(LitellmModel):
@@ -774,7 +723,6 @@ class MyAgent(DefaultAgent):
         row: dict[str, Any],
         setup_command: str,
         reward_command: str,
-        capture_evidence: bool = False,
         **kwargs: Any,
     ):
         super().__init__(model, env, **kwargs)
@@ -782,8 +730,6 @@ class MyAgent(DefaultAgent):
         self.row = row
         self.setup_command = setup_command
         self.reward_command = reward_command
-        self.capture_evidence = capture_evidence
-        self.grading_evidence: dict[str, Any] = {}
 
     def query(self) -> dict:
         remaining = self.config.step_limit - self.n_calls
@@ -799,21 +745,10 @@ class MyAgent(DefaultAgent):
         setup_result = self.env.execute({"command": self.setup_command}, timeout=SETUP_AND_REWARD_TIMEOUT_SECONDS)
         if setup_result.get("returncode") != 0 or setup_result.get("exception_info"):
             raise RuntimeError(_format_command_result("setup", setup_result))
-        if self.capture_evidence:
-            from examples.gagar.git_evidence import capture_baseline, capture_patch
-
-            capture_baseline(self.env, self.grading_evidence)
         try:
             info = super().run(task, **kwargs)
         except ContextWindowExceededError:
             info = self.messages[-1].get("extra", {})
-        if self.capture_evidence:
-            self.grading_evidence.update(
-                trajectory=copy.deepcopy(self.messages),
-                submission=str(info.get("submission", "")),
-                exit_status=str(info.get("exit_status", "")),
-            )
-            capture_patch(self.env, self.grading_evidence)
         # Only score trajectories the agent formally submitted. The reward
         # command judges the working tree via ``git diff``, so an agent that
         # never submits (exit_status LimitsExceeded / ContextWindowExceeded)
@@ -832,8 +767,6 @@ class MyAgent(DefaultAgent):
                 if reward_result.get("exception_info"):
                     raise RuntimeError(_format_command_result("reward", reward_result))
                 output = reward_result.get("output", "")
-                if self.capture_evidence:
-                    self.grading_evidence["test_output"] = output
                 reward_func = _r2e_reward if self.rollout_mode == "train" else _swebench_reward
                 reward = reward_func(self.row, output)
             finally:
@@ -919,29 +852,13 @@ class AgentServer:
             for stale in self._tmp_root.glob("*-tmp"):
                 shutil.rmtree(stale, ignore_errors=True)
         self.wheel_dir = Path(data_path) / "wheels"
-        self._sif_stop_event = threading.Event()
-        self.sif_cache = None
-        if os.environ.get("AGENT_SERVER_SIF_CACHE", "0") == "1":
-            proxy = os.environ.get("AGENT_SERVER_SIF_PROXY", "")
-            self.sif_cache = SifCache(
-                sif_dir=self.sif_dir,
-                build_tmp_root=os.environ.get("AGENT_SERVER_SIF_BUILD_TMP_DIR", str(self._tmp_root / "sif-build")),
-                executable=self.apptainer_args[0],
-                registry=os.environ.get("AGENT_SERVER_SIF_REGISTRY", ""),
-                max_bytes=int(float(os.environ.get("AGENT_SERVER_SIF_CACHE_GB", "128")) * 1024**3),
-                max_entries=int(os.environ.get("AGENT_SERVER_SIF_CACHE_ENTRIES", "0")),
-                max_builds=int(os.environ.get("AGENT_SERVER_SIF_BUILD_CONCURRENCY", "2")),
-                build_timeout=float(os.environ.get("AGENT_SERVER_SIF_BUILD_TIMEOUT", "1800")),
-                build_env={"http_proxy": proxy, "https_proxy": proxy} if proxy else {},
-                run=self._run_sif_command,
-            )
         self.sifs = {path.stem: path for path in self.sif_dir.glob("*.sif")}
         self.modes = {
             mode: ModeState(
                 data_path,
                 mode,
                 config,
-                available_images=None if self.sif_cache is not None else set(self.sifs),
+                available_images=set(self.sifs),
                 shuffle=shuffle and mode == "train",
                 seed=seed,
             )
@@ -953,56 +870,8 @@ class AgentServer:
             "eval": ThreadPoolExecutor(max_workers=eval_concurrency),
         }
         self.lock = threading.Lock()
-        # Keep leases even when construction or cleanup fails and record.env is
-        # cleared. Only a confirmed instance stop may release one.
-        self._sif_leases: dict[str, tuple[str, Path]] = {}
-        self._pending_sif_cleanup: set[str] = set()
-        self.grading_bridge = None
-        if os.environ.get("ENABLE_GAGAR", "0") == "1":
-            # Script entrypoint also works from the mini-swe-agent virtualenv.
-            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-            from examples.gagar.bridge import SandboxBridge
-
-            self.grading_bridge = SandboxBridge(
-                self.work_dir / "grading",
-                shlex.split(os.environ["GAGAR_GRADER_COMMAND"]),
-                _tracked_run,
-                concurrency=int(os.environ.get("GAGAR_CONCURRENCY", "4")),
-                retention_seconds=float(os.environ.get("GAGAR_RETENTION_SECONDS", "14400")),
-                grading_seconds=float(os.environ.get("GAGAR_TIMEOUT_SECONDS", "1800")),
-                max_retained_groups=int(os.environ.get("GAGAR_MAX_RETAINED_GROUPS", "32")),
-            )
         self._record_ttl = float(os.environ.get("AGENT_SERVER_RECORD_TTL_SECONDS", SESSION_RECORD_TTL_SECONDS))
         threading.Thread(target=self._record_sweep_loop, name="record-sweeper", daemon=True).start()
-
-    def _run_sif_command(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
-        if cmd[1] == "build":
-            kwargs["cancel_event"] = self._sif_stop_event
-            # A build spawns download/unpack/mksquashfs children. Stop the whole
-            # group before releasing its build slot or deleting its scratch.
-            kwargs["start_new_session"] = True
-        # All children must participate in the existing orphan-reaper tracking.
-        return _tracked_run(cmd, **kwargs)
-
-    def _release_sif(self, instance_name: str) -> None:
-        with self.lock:
-            lease = self._sif_leases.pop(instance_name, None)
-            self._pending_sif_cleanup.discard(instance_name)
-        if lease is not None:
-            self.sif_cache.release(lease[0])
-
-    def _reap_sif_cleanup(self) -> None:
-        with self.lock:
-            pending = {name: self._sif_leases[name] for name in self._pending_sif_cleanup}
-        for name, (_image, tmp_dir) in pending.items():
-            try:
-                error = _stop_apptainer_instance(*self.apptainer_args, name)
-                if error:
-                    raise RuntimeError(error)
-                self._release_sif(name)
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            except Exception as exc:
-                logging.warning("failed to reclaim SIF lease for %s: %s", name, exc)
 
     def create_session(self, payload: dict[str, Any]) -> dict[str, Any]:
         mode = str(payload["mode"])
@@ -1057,9 +926,6 @@ class AgentServer:
         while True:
             time.sleep(30.0)
             try:
-                self._reap_sif_cleanup()
-                if self.grading_bridge is not None:
-                    self.grading_bridge.reap()
                 self._reap_terminal_records()
             except Exception as exc:  # pragma: no cover - defensive
                 logging.debug("record sweeper error: %s", exc)
@@ -1072,11 +938,6 @@ class AgentServer:
                 record.cancel()
             future = record.future
             env = record.env
-        if self.grading_bridge is not None:
-            try:
-                self.grading_bridge.release(record.group_id)
-            except RuntimeError as exc:
-                logging.warning("failed to cleanup cancelled grading group %s: %s", record.group_id, exc)
         if future is not None:
             future.cancel()
         if env is not None:
@@ -1086,14 +947,7 @@ class AgentServer:
                 logging.warning("failed to cleanup cancelled session %s: %s", server_session_id, exc)
 
     def shutdown(self) -> None:
-        self._sif_stop_event.set()
         errors = []
-        if self.grading_bridge is not None:
-            try:
-                self.grading_bridge.shutdown()
-            except Exception as exc:
-                errors.append(str(exc))
-                logging.warning("failed to cleanup grading sandboxes during shutdown: %s", exc)
         with self.lock:
             records = list(self.records.values())
             for record in records:
@@ -1118,7 +972,6 @@ class AgentServer:
         # Reap orphans produced by the SIGKILLs above before we exit, so they do
         # not reparent to the non-reaping PID 1 and leak as permanent zombies.
         _drain_orphans()
-        self._reap_sif_cleanup()
         if errors:
             raise RuntimeError("Agent server shutdown cleanup failed:\n" + "\n".join(errors))
 
@@ -1139,7 +992,6 @@ class AgentServer:
         # with exit 255, collapsing whole rollout groups to zero reward).
         instance_name = _new_instance_name()
         info: dict[str, Any] = {}
-        retained = False
         error = ""
         tmp_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -1151,20 +1003,11 @@ class AgentServer:
                 {"api_base": record.base_url, "api_key": record.api_key}
             )
             environment = config["environment"]
-            release_sif = None
-            if self.sif_cache is not None:
-                sif_path = self.sif_cache.acquire(row["docker_image"], cancel_event=record.cancel_event)
-                with self.lock:
-                    self._sif_leases[instance_name] = (row["docker_image"], tmp_dir)
-                release_sif = lambda: self._release_sif(instance_name)
-                if record.cancel_event.is_set():
-                    raise RuntimeError("session cancelled")
-            else:
-                sif_path = self.sifs.get(image_key)
-                if sif_path is None:
-                    raise FileNotFoundError(
-                        f"Missing SIF for docker_image={row['docker_image']!r}; expected {self.sif_dir / f'{image_key}.sif'}"
-                    )
+            sif_path = self.sifs.get(image_key)
+            if sif_path is None:
+                raise FileNotFoundError(
+                    f"Missing SIF for docker_image={row['docker_image']!r}; expected {self.sif_dir / f'{image_key}.sif'}"
+                )
             environment.update({"image": str(sif_path)})
             # Pin the sandbox's temp dirs to its in-memory /tmp (provided by
             # --writable-tmpfs). `uv pip install` writes atomic .tmpXXXX scratch
@@ -1178,9 +1021,7 @@ class AgentServer:
             )
             environment.pop("environment_class", None)
             model = MyLitellmModel(**config["model"])
-            env = ApptainerInstanceEnvironment(
-                tmp_dir=tmp_dir, instance_name=instance_name, release_sif=release_sif, **config["environment"]
-            )
+            env = ApptainerInstanceEnvironment(tmp_dir=tmp_dir, instance_name=instance_name, **config["environment"])
             # Bind env FIRST (so a concurrent cancel_session can cleanup()), then
             # re-check cancel under the lock. A cancel arriving DURING the
             # constructor above (which `instance start`s a sandbox, seconds long)
@@ -1192,42 +1033,27 @@ class AgentServer:
                 cancelled = record.cancel_event.is_set()
             if cancelled:
                 raise RuntimeError("session cancelled")
-            agent = MyAgent(
+            info = MyAgent(
                 model,
                 env,
                 rollout_mode=record.mode,
                 row=row,
                 setup_command=self.r2e_config["setup_commands"][record.mode],
                 reward_command=self.r2e_config["reward_commands"][record.mode],
-                capture_evidence=self.grading_bridge is not None and record.mode == "train",
                 **config["agent"],
-            )
-            info = agent.run(str(row["problem_statement"]))
-            if self.grading_bridge is not None and record.mode == "train":
-                # Transfer ownership under the cancellation lock. The rollout
-                # worker/client must finish before group RM can start grading.
-                with self.lock:
-                    if not record.cancel_event.is_set():
-                        retained = self.grading_bridge.retain(
-                            server_session_id,
-                            group_id=record.group_id,
-                            task=str(row["problem_statement"]),
-                            env=env,
-                            tmp_dir=tmp_dir,
-                            evidence={**agent.grading_evidence, "reward": info["reward"]},
-                        )
+            ).run(str(row["problem_statement"]))
         except subprocess.CalledProcessError as exc:
             error = _format_called_process_error(exc)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
         finally:
             cleanup_error = ""
-            if env is not None and not retained:
+            if env is not None:
                 try:
                     env.cleanup()
                 except Exception as exc:
                     cleanup_error = f"{type(exc).__name__}: {exc}"
-            elif env is None:
+            else:
                 # env never got bound (constructor raised). If `_build_sandbox`
                 # had already started the instance, `env.cleanup()` above was
                 # skipped -- stop it explicitly by name so it does not leak.
@@ -1244,15 +1070,11 @@ class AgentServer:
             # TMPDIR/APPTAINER_TMPDIR, so deleting it under a still-running
             # instance causes ENOENT on its temp files.
             if cleanup_error:
-                with self.lock:
-                    if instance_name in self._sif_leases:
-                        self._pending_sif_cleanup.add(instance_name)
                 logging.warning(
                     "session cleanup failed server_session_id=%s error=%s", server_session_id, cleanup_error
                 )
                 error = f"{error}\ncleanup failed: {cleanup_error}".strip()
-            elif not retained:
-                self._release_sif(instance_name)
+            else:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
         with self.lock:
@@ -1293,8 +1115,6 @@ class AgentServer:
                 "n_calls": record.n_calls,
             }
         )
-        if self.grading_bridge is not None and record.mode == "train":
-            data["gagar"] = {"session_id": server_session_id, "group_id": record.group_id}
         return data
 
 
@@ -1342,10 +1162,6 @@ def main() -> None:
     signal.signal(signal.SIGINT, stop)
 
     app = Flask(__name__)
-    if server.grading_bridge is not None:
-        from examples.gagar.bridge import register_routes
-
-        register_routes(app, server.grading_bridge)
 
     @app.post("/sessions")
     def create_session():

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from examples.mini_swe_agent.sif_cache import SifCache, image_key
+from examples.gagar.minisweagent.sif_cache import SifCache, image_key
 
 
 def _no_instances(cmd, **kwargs):

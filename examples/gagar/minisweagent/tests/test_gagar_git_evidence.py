@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from examples.gagar.git_evidence import capture_baseline, capture_patch
+from examples.gagar.minisweagent.git_evidence import capture_baseline, capture_patch
 
 
 def git(repo, *args):
@@ -113,7 +113,7 @@ def test_capture_does_not_swallow_keyboard_interrupt():
 
 def test_agent_freezes_post_setup_to_pre_test_changes(monkeypatch, repo):
     pytest.importorskip("minisweagent")
-    from examples.mini_swe_agent import agent_server as server
+    from examples.gagar.minisweagent import agent_server as server
 
     class AgentEnvironment(Environment):
         def execute(self, action, **kwargs):

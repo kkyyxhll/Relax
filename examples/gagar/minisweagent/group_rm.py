@@ -3,14 +3,13 @@
 """Group RM backed by retained mini-swe-agent sandboxes and Relax GenRM."""
 
 import asyncio
-import os
 import time
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from examples.gagar.gagar import compute_group_rewards
+from examples.gagar.rewards import reward_records
 from relax.utils.logging_utils import get_logger
 
 
@@ -21,27 +20,7 @@ def outcome(sample: Any) -> float:
     return sample.reward["test_reward"] if isinstance(sample.reward, dict) else sample.reward
 
 
-def reward_records(
-    original: list[float], corrected: list[float], weights: list[float], *, fallback: bool = False
-) -> list[dict]:
-    scores = compute_group_rewards(corrected, weights)
-    return [
-        {
-            "score": score,
-            "test_reward": test,
-            "outcome_reward": reward,
-            "quality_weight": weight,
-            "grader_fallback": int(fallback),
-        }
-        for score, test, reward, weight in zip(scores, original, corrected, weights, strict=True)
-    ]
-
-
 async def reward_func(args: Any, samples: list[Any], **kwargs: Any) -> list[dict]:
-    if os.environ.get("GAGAR_GRADER_MODE", "bridge") == "sandbox":
-        from examples.gagar.code_generate.sandbox import reward_group
-
-        return await reward_group(args, samples, **kwargs)
     original = [outcome(sample) for sample in samples]
     baseline = reward_records(original, original, [1.0] * len(samples))
     # Eval samples have no retained-sandbox metadata and keep binary rewards.

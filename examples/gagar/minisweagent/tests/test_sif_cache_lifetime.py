@@ -13,9 +13,9 @@ import pytest
 
 
 pytest.importorskip("minisweagent")
-from examples.gagar.bridge import SandboxBridge
-from examples.mini_swe_agent import agent_server as server
-from examples.mini_swe_agent.sif_cache import SifCache
+from examples.gagar.minisweagent import agent_server as server
+from examples.gagar.minisweagent.bridge import SandboxBridge
+from examples.gagar.minisweagent.sif_cache import SifCache
 
 
 @pytest.fixture
@@ -190,7 +190,7 @@ def test_on_demand_keeps_tasks_without_prebuilt_sif(monkeypatch, tmp_path, on_de
     monkeypatch.setattr(server.AgentServer, "_record_sweep_loop", lambda self: None)
     monkeypatch.setenv("AGENT_SERVER_TMP_DIR", str(tmp_path / "scratch"))
     monkeypatch.setenv("AGENT_SERVER_SIF_CACHE", str(int(on_demand)))
-    monkeypatch.setenv("ENABLE_GAGAR", "0")
+    monkeypatch.setenv("GAGAR_GRADER_COMMAND", "fake-grader")
     instance = server.AgentServer(
         data_path=str(tmp_path),
         sif_dir=str(sif_dir),
@@ -201,5 +201,6 @@ def test_on_demand_keeps_tasks_without_prebuilt_sif(monkeypatch, tmp_path, on_de
     try:
         assert instance.modes["train"].count == expected
     finally:
+        instance.grading_bridge.shutdown()
         for executor in instance.executors.values():
             executor.shutdown()

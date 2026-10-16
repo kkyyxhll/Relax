@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from examples.gagar.bridge import GradingJob, SandboxBridge
-from examples.gagar.group_rm import reward_func
+from examples.gagar.minisweagent.bridge import GradingJob, SandboxBridge
+from examples.gagar.minisweagent.group_rm import reward_func
 
 
 class FakeEnvironment:

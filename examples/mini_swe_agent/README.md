@@ -116,38 +116,6 @@ http_proxy=http://host:port https_proxy=http://host:port \
 Training and agent execution read local parquet/SIF files and do not need proxy
 variables.
 
-### Optional on-demand SIF cache
-
-To start without converting the whole dataset, use `R2E_SETUP_SKIP_SIFS=1`
-for the setup command above, then export `AGENT_SERVER_SIF_CACHE=1` before
-launching training. This mode includes tasks whose images are not cached yet;
-the first session builds the missing image. Existing SIFs are reused.
-
-Keep `R2E_SIF_DIR` and `AGENT_SERVER_SIF_BUILD_TMP_DIR` on node-local storage.
-`AGENT_SERVER_SIF_CACHE_GB` defaults to 128 GiB; optional
-`AGENT_SERVER_SIF_CACHE_ENTRIES` also limits the number of SIFs (0 disables that
-limit). `AGENT_SERVER_SIF_BUILD_CONCURRENCY` defaults to 2 builds across servers
-sharing this cache directory; use the same value for those servers. Builds
-time out after `AGENT_SERVER_SIF_BUILD_TIMEOUT` seconds (default 1800).
-
-For a Docker Hub mirror, set `AGENT_SERVER_SIF_REGISTRY`; otherwise images are
-pulled directly. `AGENT_SERVER_SIF_PROXY` sets HTTP/HTTPS proxy variables only
-for image construction, leaving agent/model requests unchanged. All exported
-`AGENT_SERVER_*` settings are forwarded by the GAGAR Ray driver recipe.
-
-Concurrent sessions share a read-only SIF under shared file leases. Each
-instance keeps its own writable layer. LRU eviction skips leased images and
-live instances; the lease ends only after the instance is confirmed stopped.
-The cache budget is a soft limit on completed SIFs: pinned images, build scratch
-and in-progress output need additional space. Apptainer's extra build cache is
-disabled. Session cancellation prevents a later instance start, while a shared
-build already in progress may finish for other sessions; server shutdown aborts
-its outstanding builds.
-
-The cache is adapted from `examples/multi-harness-dev/task/sif_cache.py` at
-`882c7c34f7d8b57e3af6cc29fec427b25a38583d`. Without this opt-in, the original
-prebuilt-image filtering and setup remain in effect.
-
 ## Launch training
 
 ```bash

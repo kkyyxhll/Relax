@@ -75,7 +75,6 @@ class Message(BaseModel):
 
     role: str
     content: str
-    reasoning_content: Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -345,18 +344,6 @@ class GenRM(Base):
                 raise
             except Exception as e:
                 status = int(getattr(getattr(e, "response", None), "status_code", 0) or 0)
-                self._logger.warning(
-                    "GenRM engine request failed: instance=%s engine=%s attempt=%s status=%s "
-                    "input_tokens=%s context_length=%s max_new_tokens=%s error_type=%s",
-                    key,
-                    idx,
-                    _attempt,
-                    status,
-                    len(input_ids),
-                    spec.get("engine_config", {}).get("context_length"),
-                    default_sampling["max_new_tokens"],
-                    type(e).__name__,
-                )
                 if (status == 0 or status >= 500) and _attempt < retry_attempts:
                     # A transport error means this engine may be gone and its
                     # replacement will come back on a different port, so drop the

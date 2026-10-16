@@ -7,8 +7,8 @@ import pytest
 
 
 pytest.importorskip("minisweagent")
-from examples.gagar.bridge import SandboxBridge
-from examples.mini_swe_agent import agent_server as server
+from examples.gagar.minisweagent import agent_server as server
+from examples.gagar.minisweagent.bridge import SandboxBridge
 
 
 @pytest.mark.parametrize(

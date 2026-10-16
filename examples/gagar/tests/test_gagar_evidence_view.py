@@ -7,8 +7,8 @@ import pytest
 
 
 pytest.importorskip("minisweagent")
-from examples.gagar.grader import BridgeEnvironment
 from examples.gagar.grader_common import read_evidence
+from examples.gagar.minisweagent.grader import BridgeEnvironment
 
 
 def test_trajectory_pages_remove_only_mirrored_payloads_without_mutating_audit():

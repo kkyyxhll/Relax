@@ -60,7 +60,7 @@ def test_proxy_only_forwards_messages_to_fixed_genrm(tmp_path):
             assert client.get("http://local/generate").status_code == 501
             messages = [
                 {"role": "user", "content": "grade"},
-                {"role": "assistant", "content": "action", "reasoning_content": "check evidence"},
+                {"role": "assistant", "content": "<think>check evidence</think>action"},
             ]
             result = client.post(
                 "http://local/generate", json={"messages": messages, "url": "http://other", "command": "bad"}
@@ -86,8 +86,8 @@ def test_no_host_environment_or_bind_injection(monkeypatch, tmp_path):
 @pytest.fixture
 def host_runtime(monkeypatch):
     pytest.importorskip("minisweagent")
+    from examples.gagar.code_generate import apptainer as agent_server
     from examples.gagar.code_generate import sandbox
-    from examples.mini_swe_agent import agent_server
 
     monkeypatch.setattr(agent_server, "_install_child_subreaper_and_reaper", lambda: None)
     monkeypatch.setattr(agent_server, "_drain_orphans", lambda: None)
@@ -349,7 +349,7 @@ def test_grader_diagnostics_survive_sandbox_cleanup(host_runtime, monkeypatch, t
 
 @pytest.mark.parametrize("subset", ["primeintellect", "taco", "lcbv5"])
 def test_prepared_task_preserves_problem_and_starter(subset):
-    from examples.code_generate.prepare_data import convert_row
+    from examples.gagar.code_generate.prepare_data import convert_row
 
     row = {
         "problem": "Print the literal text <think>.",

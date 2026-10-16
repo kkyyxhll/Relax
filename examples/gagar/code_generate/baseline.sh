@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Qwen3.5-4B, DeepCoder train, 8 GPUs colocate GRPO.
-# Submit with scripts/entrypoint/ray-job.sh examples/code_generate/baseline.sh.
+# Submit with scripts/entrypoint/ray-job.sh examples/gagar/code_generate/baseline.sh.
 
 set -ex
 set -o pipefail
@@ -16,7 +16,7 @@ if [[ "${GAGAR_GRADER_MODE:-}" != "sandbox" ]]; then
 fi
 export RAY_NO_WAIT="${RAY_NO_WAIT-}"
 if [ -z "${RELAX_ENTRYPOINT_MODE:-}" ]; then
-    source "${SCRIPT_DIR}/../../scripts/entrypoint/local.sh"
+    source "${SCRIPT_DIR}/../../../scripts/entrypoint/local.sh"
 fi
 source "${MODEL_CONFIG_DIR}/qwen35-4B.sh"
 
@@ -44,7 +44,7 @@ ROLLOUT_ARGS=(
    --apply-chat-template-kwargs '{"enable_thinking":true}'
    --rollout-shuffle
    --rollout-seed 42
-   --custom-rm-path examples.code_generate.app.reward.reward
+   --custom-rm-path examples.gagar.code_generate.app.reward.reward
    --rm-url "${SANDBOX_URL:-}"
    --reward-max-concurrency 16
    --num-epoch 1
@@ -66,7 +66,7 @@ PERF_ARGS=(
    --tensor-model-parallel-size 2
    --sequence-parallel
    --pipeline-model-parallel-size 1
-   --context-parallel-size 2
+   --context-parallel-size 1
    --expert-model-parallel-size 1
    --expert-tensor-parallel-size 1
 

@@ -20,7 +20,7 @@ GAGAR_ARGS=(
    # Eight training GPUs: TP2, PP1, CP1, DP4.
    --context-parallel-size 1
    --group-rm
-   --custom-rm-path examples.gagar.group_rm.reward_func
+   --custom-rm-path examples.gagar.code_generate.sandbox.reward_group
    --reward-key score
    --eval-reward-key test_reward
    --reward-max-concurrency 2
@@ -29,7 +29,7 @@ GAGAR_ARGS=(
    --genrm-num-gpus 4
    --genrm-num-gpus-per-engine 2
    --genrm-engine-config '{"context_length": 65536, "mem_fraction_static": 0.8, "cuda_graph_backend_prefill": "disabled"}'
-   --genrm-sampling-config '{"temperature": 1.0, "top_p": 0.95, "top_k": 20, "max_response_len": 16384, "chat_template_kwargs": {"enable_thinking": true, "preserve_thinking": true, "reasoning_effort": "xhigh"}}'
+   --genrm-sampling-config '{"temperature": 1.0, "top_p": 0.95, "top_k": 20, "max_response_len": 16384, "chat_template_kwargs": {"enable_thinking": true, "preserve_thinking": false, "reasoning_effort": "xhigh"}}'
 )
 RUNTIME_ENV_JSON=$(python3 - <<'ENV'
 import json
@@ -43,4 +43,4 @@ print(json.dumps(runtime))
 ENV
 )
 export RESOURCE RUNTIME_ENV_JSON
-exec bash "${SCRIPT_DIR}/../../code_generate/baseline.sh" "${GAGAR_ARGS[@]}" "$@"
+exec bash "${SCRIPT_DIR}/baseline.sh" "${GAGAR_ARGS[@]}" "$@"

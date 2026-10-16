@@ -14,20 +14,11 @@ import httpx
 import yaml
 
 from examples.gagar.grader_common import (
-    GenRMModel as GenRMModel,
-)
-from examples.gagar.grader_common import (
-    GraderAgent as GraderAgent,
-)
-from examples.gagar.grader_common import (
-    parse_action as parse_action,
-)
-from examples.gagar.grader_common import (
     read_evidence,
     run_grader,
     submit_result,
 )
-from examples.gagar.scoring import grade_to_weights
+from examples.gagar.minisweagent.scoring import grade_to_weights
 
 
 class BridgeEnvironment:

@@ -12,8 +12,9 @@ pytest.importorskip("minisweagent")
 from minisweagent.exceptions import TimeExceeded
 
 from examples.gagar import grader_common
-from examples.gagar.grader import BridgeEnvironment, GenRMModel, GraderAgent
-from examples.gagar.scoring import CRITERIA
+from examples.gagar.grader_common import GenRMModel, GraderAgent
+from examples.gagar.minisweagent.grader import BridgeEnvironment
+from examples.gagar.minisweagent.scoring import CRITERIA
 
 
 @pytest.mark.parametrize(

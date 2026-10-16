@@ -10,8 +10,9 @@ pytest.importorskip("minisweagent")
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.exceptions import FormatError
 
-from examples.gagar.grader import BridgeEnvironment, GenRMModel, GraderAgent, parse_action
-from examples.gagar.scoring import CRITERIA
+from examples.gagar.grader_common import GenRMModel, GraderAgent, parse_action
+from examples.gagar.minisweagent.grader import BridgeEnvironment
+from examples.gagar.minisweagent.scoring import CRITERIA
 
 
 def test_parse_action_never_executes_thinking_block():
@@ -110,8 +111,7 @@ def test_genrm_thinking_retains_raw_history_and_extracts_only_final_action(prefi
         model.query([message, {"role": "user", "content": "tool result"}])
         assert histories[-1][0] == {
             "role": "assistant",
-            "content": marker + json.dumps(action),
-            "reasoning_content": "Inspect the candidate before grading.",
+            "content": "<think>\nInspect the candidate before grading.\n</think>\n\n" + marker + json.dumps(action),
         }
         assert message["content"] == response
     finally:
@@ -135,7 +135,7 @@ def test_unfinished_thinking_stays_reasoning_on_next_query():
         assert error.value.messages[0]["extra"]["actions"] == []
         with pytest.raises(FormatError):
             model.query(error.value.messages)
-        assert histories[-1][0] == {"role": "assistant", "content": "", "reasoning_content": response}
+        assert histories[-1][0] == {"role": "assistant", "content": "<think>\n" + response + "\n</think>\n\n"}
         assert error.value.messages[0]["content"] == response
         assert "Finish thinking and close it with </think>" in error.value.messages[1]["content"]
         assert "Shell" not in error.value.messages[1]["content"]
@@ -306,8 +306,8 @@ def test_tool_argument_can_contain_literal_thinking_delimiter():
 
 @pytest.mark.parametrize("submitted", [True, False])
 def test_frozen_evidence_preserves_original_outcome_submission_gate(monkeypatch, submitted):
-    from examples.gagar import git_evidence
-    from examples.mini_swe_agent.agent_server import MyAgent
+    from examples.gagar.minisweagent import git_evidence
+    from examples.gagar.minisweagent.agent_server import MyAgent
 
     calls = []
 
@@ -486,3 +486,15 @@ def test_diagnostics_leave_invalid_submission_for_tool_to_reject(tmp_path, evalu
 def test_escaped_tool_command_is_preserved(command):
     action = {"name": "bash", "rollout_n": 0, "command": command}
     assert parse_action(json.dumps(action)) == action
+
+
+def test_inline_history_survives_original_genrm_message_schema():
+    genrm = pytest.importorskip("relax.components.genrm")
+    action = '{"name":"bash","command":"python benchmark.py"}'
+    messages = [
+        {"role": "user", "content": "Grade candidates"},
+        {"role": "assistant", "content": "<think>\nCheck complexity\n</think>\n\n" + action},
+        {"role": "user", "content": "Tool result: 7.6 seconds"},
+    ]
+    request = genrm.GenerateRequest.model_validate_json(json.dumps({"messages": messages}))
+    assert request.model_dump(exclude_none=True)["messages"] == messages

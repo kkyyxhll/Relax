@@ -24,7 +24,7 @@ make run HOST=0.0.0.0 PORT=8080
 
 ```bash
 export DATA_DIR=/path/to/deepcoder-train
-python examples/code_generate/prepare_data.py --output-dir "${DATA_DIR}"
+python examples/gagar/code_generate/prepare_data.py --output-dir "${DATA_DIR}"
 ```
 
 ## 启动
@@ -33,12 +33,12 @@ python examples/code_generate/prepare_data.py --output-dir "${DATA_DIR}"
 export MODEL_DIR=/path/to/models  # 包含 Qwen3.5-4B 子目录
 export SAVE_DIR=/path/to/checkpoints
 export SANDBOX_URL=http://sandbox-host:8080
-RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/code_generate/baseline.sh
+RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/gagar/code_generate/baseline.sh
 ```
 
 | 配置            | 值                                                                   |
 | --------------- | -------------------------------------------------------------------- |
-| Actor           | 8 GPU；TP2 / CP2 / PP1 / DP2                                         |
+| Actor           | 8 GPU；TP2 / CP1 / PP1 / DP4                                         |
 | Rollout         | 同 8 GPU 分时复用；4 个 TP2 引擎                                     |
 | Batch           | 32 题 × 8 个候选 = 256                                               |
 | 输入 / 回复上限 | 2,048 / 16,384 tokens                                                |
@@ -51,17 +51,17 @@ RAY_NO_WAIT=1 bash scripts/entrypoint/ray-job.sh examples/code_generate/baseline
 
 ## 已记录的训练曲线
 
-![DeepCoder baseline training curves](results/baseline.png)
+训练曲线见 [PR #444 的 Screenshots / Logs](https://github.com/redai-studio/Relax/pull/444)。
 
-图和 [原始指标 CSV](results/baseline.csv) 来自同一次历史 baseline 的指标导出，快照时间为 **2026-10-16 04:57:56 UTC**。导出的 238 个 reward、grad norm、entropy、logprob-difference 点覆盖 iteration 0–237；step time 有 237 个点，覆盖 0–236。横轴保留指标系统的 iteration，不额外推断为独立评测轮次。
+图来自同一次历史 baseline 的指标导出，快照时间为 **2026-10-16 04:57:56 UTC**。导出的 238 个 reward、grad norm、entropy、logprob-difference 点覆盖 iteration 0–237；step time 有 237 个点，覆盖 0–236。横轴保留指标系统的 iteration，不额外推断为独立评测轮次。
 
 浅线为未平滑、未降采样的原始数据；深线为包含当前点的至多 20 点移动平均。`rollout/raw_reward` 是当前训练采样的通过率，**不是独立测试集准确率**。前 20 点平均通过率 0.3064，最后 20 点为 0.6334；题目随训练变化，这两个窗口只描述该次运行。其他面板展示优化统计与 step 耗时，不据此声称算法对比收益。
 
-上述记录使用表中的 CP2、std 开启配置。本 recipe 是纯 0/1 baseline，没有质量 grader 或 group reward 重分配。
+上述历史记录使用 TP2 / CP2 / DP2、std 开启配置。当前 recipe 默认 CP1/DP4，其余参数不变。本 recipe 是纯 0/1 baseline，没有质量 grader 或 group reward 重分配。
 
 ## CPU 回归
 
 ```bash
-pytest -q tests/examples/test_code_generate.py
-bash -n examples/code_generate/baseline.sh
+pytest -q examples/gagar/code_generate/tests/test_baseline.py
+bash -n examples/gagar/code_generate/baseline.sh
 ```

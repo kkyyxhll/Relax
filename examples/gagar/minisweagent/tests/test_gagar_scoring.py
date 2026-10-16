@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from examples.gagar.scoring import CRITERIA, grade_to_weights, quality_tier
+from examples.gagar.minisweagent.scoring import CRITERIA, grade_to_weights, quality_tier
 
 
 def evaluation(index, scores, **kwargs):

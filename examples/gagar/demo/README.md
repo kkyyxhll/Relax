@@ -52,6 +52,6 @@
 
 ## 如何读这些材料
 
-- [总流程、SWE 环境与生命周期](../DEMO.md)；[代码生成镜像构建和启动](../code_generate/README.md)。环境准备图是当前实现说明，动画是历史观测，二者不要混同为本分支新跑的端到端结果。
-- [SWE system prompt](../grader.yaml) / [instance prompt](../instance.jinja)；[代码生成 system prompt](../code_generate/grader.yaml) / [instance prompt](../code_generate/instance.jinja)。system 定义工具和标准，instance 只放具体 task、候选 outcome 和证据入口。
+- [总流程](../DEMO.md) / [SWE 环境与生命周期](../minisweagent/README.md)；[代码生成镜像构建和启动](../code_generate/README.md)。环境准备图是当前实现说明，动画是历史观测，二者不要混同为本分支新跑的端到端结果。
+- [SWE system prompt](../minisweagent/grader.yaml) / [instance prompt](../minisweagent/instance.jinja)；[代码生成 system prompt](../code_generate/grader.yaml) / [instance prompt](../code_generate/instance.jinja)。system 定义工具和标准，instance 只放具体 task、候选 outcome 和证据入口。
 - 比较 baseline 时使用原始 0/1 outcome。以上展示链路行为和评分依据，不宣称训练收敛更快。

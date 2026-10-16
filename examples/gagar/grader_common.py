@@ -86,9 +86,10 @@ class GenRMModel:
         for message in messages:
             item = {"role": message["role"], "content": message["content"]}
             if self.thinking and item["role"] == "assistant":
+                # /generate prefills <think>, so restore its wrapper in history.
                 reasoning, closed, answer = item["content"].partition("</think>")
-                item["reasoning_content"] = reasoning.removeprefix("<think>").strip()
-                item["content"] = answer.strip() if closed else ""
+                reasoning = reasoning.strip().removeprefix("<think>").strip()
+                item["content"] = f"<think>\n{reasoning}\n</think>\n\n{answer.strip() if closed else ''}"
             history.append(item)
         payload = {"messages": history}
         for attempt in range(3):

@@ -22,7 +22,7 @@ from typing import Any, Iterator
 
 import httpx
 
-from examples.code_generate.app.reward import extract_code, judge_request, outcome_from_result
+from examples.gagar.code_generate.app.reward import extract_code, judge_request, outcome_from_result
 from examples.gagar.code_generate.scoring import grade_to_weights
 
 
@@ -110,7 +110,7 @@ def process_environment(tmp_dir: Path) -> dict[str, str]:
 
 @contextmanager
 def instance(image: str, tmp_dir: Path, mounts: dict[Path, str], leases: Path) -> Iterator[Any]:
-    from examples.mini_swe_agent.agent_server import (
+    from examples.gagar.code_generate.apptainer import (
         ApptainerInstanceEnvironment,
         _new_instance_name,
         _stop_apptainer_instance,
@@ -163,7 +163,7 @@ def instance(image: str, tmp_dir: Path, mounts: dict[Path, str], leases: Path) -
 
 def cleanup_leases(leases: Path, owner: int) -> None:
     """A fresh host worker can retry cleanup after the grading worker exits."""
-    from examples.mini_swe_agent.agent_server import _instance_owner_pid, _stop_apptainer_instance
+    from examples.gagar.code_generate.apptainer import _instance_owner_pid, _stop_apptainer_instance
 
     for lease in leases.glob("mswe-*"):
         if _instance_owner_pid(lease.name) != owner:
@@ -190,7 +190,7 @@ def cleanup_scratch(directory: Path, owner: int) -> None:
 
 def execute(env: Any, argv: list[str], timeout: int) -> str:
     """Only fixed harness commands cross this host/container boundary."""
-    from examples.mini_swe_agent.agent_server import _tracked_run
+    from examples.gagar.code_generate.apptainer import _tracked_run
 
     # Limits apply to all descendants, including commands launched by the grader.
     command = (
@@ -239,7 +239,7 @@ def write_json(path: Path, value: Any) -> None:
 
 def run_group(payload: dict, output: Path) -> None:
     """Runs in the mini-swe-agent venv, never in the training process."""
-    from examples.mini_swe_agent.agent_server import _drain_orphans, _install_child_subreaper_and_reaper
+    from examples.gagar.code_generate.apptainer import _drain_orphans, _install_child_subreaper_and_reaper
 
     _install_child_subreaper_and_reaper()
     image = os.environ["GAGAR_SANDBOX_IMAGE"]
@@ -409,7 +409,7 @@ async def finish_worker(proc: Any, python: str, directory: Path, log: Any) -> No
 
 
 async def reward_group(args: Any, samples: list[Any], **kwargs: Any) -> list[dict]:
-    from examples.gagar.group_rm import reward_records
+    from examples.gagar.rewards import reward_records
     from relax.utils.logging_utils import get_logger
     from relax.utils.utils import get_serve_url
 
