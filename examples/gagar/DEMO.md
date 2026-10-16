@@ -51,11 +51,9 @@ Only task-specific environment adapters execute commands. Both graders reuse the
 
 ## Recorded execution
 
-[Replay notes and complete group results](demo/README.md) accompany two animations. They are curated, time-compressed replays of recorded runs, not a live terminal or a rerun of this branch. Environment setup is documented in each task directory.
-
-![SWE bridge grader recorded replay](demo/swe-replay.gif)
-
-![Code-generation sandbox grader recorded replay](demo/codegen-replay.gif)
+Historical SWE and code-generation animations and review notes are kept in
+[PR #446](https://github.com/redai-studio/Relax/pull/446). They replay recorded runs,
+not a live terminal or a rerun of this branch.
 
 ## Shared model messages
 

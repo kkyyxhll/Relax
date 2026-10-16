@@ -50,20 +50,8 @@ cap 生效时不再补回全部正优势；最终减均值也会改变失败候�
 
 原始 0/1 outcome 应另存用于通过率、过滤和 baseline 比较，不能用转换后的训练分数代替。该模块没有包含完整 agentic grader，也没有声称训练收益已被验证。
 
-## 验证
-
-```bash
-pytest -q examples/gagar/tests/test_gagar.py
-```
-
-测试直接经过 Relax 的生产组归一化函数，覆盖 cap 前后、零权重、全通过/全失败、候选顺序和不修改输入。
-
 ## Agentic grader demo（Draft）
 
-两种执行环境、各自的 prompts、安装步骤和真实轨迹回放见 [DEMO.md](DEMO.md)。该 demo 待审阅，训练收益尚未验证。
+两种执行环境、各自的 prompts 和安装步骤见 [DEMO.md](DEMO.md)。该 demo 待审阅，训练收益尚未验证。
 
-目录：`code_generate/` 包含代码生成 baseline 与 GAGAR；`minisweagent/` 包含 SWE GAGAR 的完整实现和 SIF cache。共享部分为 `gagar.py`、`rewards.py` 和 `grader_common.py`。所有示例与回归测试均放在本目录。
-
-```bash
-pytest -q examples/gagar
-```
+目录：`code_generate/` 包含代码生成 baseline 与 GAGAR；`minisweagent/` 包含 SWE GAGAR 的完整实现和 SIF cache。共享部分为 `gagar.py`、`rewards.py` 和 `grader_common.py`。历史运行回放保留在 [PR #446](https://github.com/redai-studio/Relax/pull/446) 正文。

@@ -29,6 +29,8 @@ def compute_group_rewards(rewards: list[float], weights: list[float], cap: float
     passing = [i for i, reward in enumerate(rewards) if reward == 1]
     if not passing or len(passing) == len(rewards):
         return rewards.copy()
+    if any(not (0 <= weights[i] <= 1) for i in passing):
+        raise ValueError("passing weights must be within [0, 1]")
 
     # 1. Dr.GRPO:  mean-centered outcome advantage.
     reward_mean = sum(rewards) / len(rewards)

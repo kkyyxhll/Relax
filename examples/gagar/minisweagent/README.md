@@ -159,10 +159,6 @@ test output in pages; `bash` inspects the current post-test sandbox. The grader
 must distinguish original candidate edits from later test or inspection
 changes. Reference-patch similarity is not a quality criterion.
 
-No production training launch is part of the unit tests. Tests using fake
-sandboxes and mocked GenRM transport run without Apptainer; real sandbox
-validation must be explicitly run on the authorized task machine.
-
 ## SIF cache settings
 
 | Variable                             | Default                            | Purpose                                                   |
