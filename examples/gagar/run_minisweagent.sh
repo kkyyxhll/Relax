@@ -190,6 +190,7 @@ GAGAR_ARGS=(
    --custom-rm-path examples.gagar.app.minisweagent.group_rm.reward_func
    --reward-key score
    --eval-reward-key test_reward
+   --custom-rollout-log-function-path examples.gagar.app.metrics.log_rollout
    --genrm-model-path "${GAGAR_MODEL_PATH}"
    --genrm-num-gpus 4
    --genrm-num-gpus-per-engine 4

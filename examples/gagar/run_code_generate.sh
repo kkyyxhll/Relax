@@ -25,6 +25,7 @@ GAGAR_ARGS=(
    --custom-rm-path examples.gagar.app.code_generate.group_rm.reward_group
    --reward-key score
    --eval-reward-key test_reward
+   --custom-rollout-log-function-path examples.gagar.app.metrics.log_rollout
    --reward-max-concurrency 2
    --disable-grpo-std-normalization
    --genrm-model-path "${GAGAR_MODEL_PATH}"

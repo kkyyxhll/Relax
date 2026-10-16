@@ -21,7 +21,7 @@ printf '\n%s\n%s\n' "$head" "$tree"
 
 
 def _execute(env: Any, command: str) -> dict:
-    result = env.execute({"command": command}, check_finished=False)
+    result = env.execute({"command": command}, cwd="/testbed", check_finished=False)
     if result.get("returncode") != 0 or result.get("exception_info"):
         raise RuntimeError(f"git evidence failed: {str(result)[:1000]}")
     return result
