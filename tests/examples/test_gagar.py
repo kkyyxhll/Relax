@@ -57,6 +57,11 @@ def test_candidate_order_and_failing_weights_do_not_change_assignment():
         ([], [], 1.5),
         ([1, 0], [1], 1.5),
         ([0.5, 0], [1, 1], 1.5),
+        ([1, 0], [-0.1, 0], 1.5),
+        ([1, 0], [1.1, 0], 1.5),
+        ([1, 0], [float("nan"), 0], 1.5),
+        ([1, 0], [float("inf"), 0], 1.5),
+        ([1, 0], [float("-inf"), 0], 1.5),
     ],
 )
 def test_invalid_inputs_are_rejected(rewards, weights, cap):
